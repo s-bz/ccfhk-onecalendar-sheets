@@ -1,0 +1,11 @@
+# Claude
+.claude
+.specstory
+
+# macOS
+.DS_Store
+*.pem
+
+# Google Apps Script
+.clasp.json
+node_modules/
