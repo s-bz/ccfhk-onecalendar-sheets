@@ -126,11 +126,27 @@ Chaque feuille département doit avoir :
 
 | Colonne | Requis | Description |
 |---------|--------|-------------|
-| Date | Oui | Date de l'événement |
+| Début | Oui* | Date/heure de début (nouveau format) |
+| Fin | Non | Date/heure de fin (optionnel) |
+| Date | Oui* | Date de l'événement (format legacy - rétrocompatible) |
 | Service | Oui | Type de service |
 | Évènement | Oui | Nom de l'événement (accepte variations d'accents) |
 | Sur site CCFHK? | Non | Oui/Non - événement sur site |
 | Sur calendrier excel? | Non | Oui/Non - à inclure dans calendrier Excel |
+
+*Note: Soit "Début" (nouveau) soit "Date" (legacy) est requis. Le système détecte automatiquement le format.
+
+### Support Date/Heure
+
+Le calendrier supporte maintenant les événements avec heures et les événements multi-jours :
+
+| Début | Fin | Résultat Google Calendar |
+|-------|-----|--------------------------|
+| `15/03/2025` | Vide | Événement journée entière |
+| `15/03/2025` | `16/03/2025` | Événement multi-jours (journée entière) |
+| `15/03/2025 14:00` | Vide | Événement avec heure (durée 1h par défaut) |
+| `15/03/2025 14:00` | `15/03/2025 16:00` | Événement avec durée |
+| `15/03/2025 14:00` | `17/03/2025 12:00` | Événement multi-jours avec heures |
 
 ## Navigation vers la source
 
@@ -181,7 +197,6 @@ Chaque événement dans le calendrier est un **hyperlien** vers sa feuille sourc
 ## Hors périmètre
 
 - Édition directe depuis la vue calendrier (utiliser hyperliens pour naviguer vers la source)
-- Intégration Google Calendar (pourrait être ajouté ultérieurement)
 - Export PDF
 - Interface personnalisation des couleurs
 
@@ -201,3 +216,96 @@ Chaque événement dans le calendrier est un **hyperlien** vers sa feuille sourc
 - [x] Mise en évidence du jour actuel
 - [x] Semaine commençant le lundi
 - [x] Indicateurs visuels pour statut "Sur calendrier excel" (❓ pour vide, 🙈 pour Non)
+
+---
+
+## Synchronisation Google Calendar
+
+### Problématique
+
+Les utilisateurs veulent que les événements marqués "Sur site CCFHK? = Oui" soient automatiquement synchronisés vers un Google Calendar partagé pour accès mobile et intégration avec d'autres outils.
+
+### Exigences
+
+- **Filtre** : Seuls les événements avec `Sur site CCFHK? = Oui` sont synchronisés
+- **Calendrier unique** : Un seul Google Calendar partagé pour tous les départements
+- **Tags** : Nom du département dans la description au format `[[[NOM_DÉPARTEMENT]]]` pour filtrage
+- **Sync incrémentale** : Suivi des IDs d'événements pour créer/modifier/supprimer uniquement les changements
+- **Auto-sync** : Déclenché lors de modifications des feuilles (avec debounce de 30s)
+- **Événements journée entière** : Pas d'heure dans les données source
+- **Suppressions** : Si `Sur site CCFHK` devient Non/vide, l'événement est supprimé du Calendar
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Flux de données                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  19 Feuilles Départements        Feuille _CalendarSync              │
+│  ┌──────────────────┐           ┌─────────────────────────────┐     │
+│  │ Date             │           │ eventHash | gcalEventId     │     │
+│  │ Service          │ ────────> │ md5...    | abc123...       │     │
+│  │ Evenement        │           │ md5...    | def456...       │     │
+│  │ Sur site CCFHK?  │           └─────────────────────────────┘     │
+│  └──────────────────┘                        │                       │
+│         │                                    ▼                       │
+│         │ Filtre:                ┌─────────────────────────────┐     │
+│         │ Sur site = Oui         │    Google Calendar           │     │
+│         └───────────────────────>│    [[[DÉPARTEMENT]]] tags    │     │
+│                                  │    Événements journée        │     │
+│                                  └─────────────────────────────┘     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Stratégie d'ID d'événement
+
+Hash MD5 généré à partir des données (pas de modification des feuilles sources) :
+
+```javascript
+eventHash = MD5(département + "|" + date + "|" + service + "|" + événement)
+```
+
+### Format événement Calendar
+
+```javascript
+{
+  title: "Service | Évènement",  // ou juste "Évènement" si pas de service
+  description: "[[[NOM_DÉPARTEMENT]]]\n\nSource: CCFHK Events",
+  start: { date: "2025-03-15" },  // Journée entière
+  end: { date: "2025-03-16" }     // Journée entière = début + 1 jour
+}
+```
+
+### Utilisation
+
+1. **Sync manuelle** : Menu "Calendrier > Synchroniser Google Calendar"
+2. **Sync automatique** : Déclenchée 30 secondes après modification d'une feuille département
+3. **Filtrage dans Google Calendar** : Rechercher `[[[NOM_DÉPARTEMENT]]]` dans la description
+
+### Fonctions principales
+
+| Fonction | Objectif |
+|----------|----------|
+| `syncToGoogleCalendar()` | Orchestrateur principal |
+| `getCalendar()` | Récupère le calendrier par ID |
+| `getSyncTrackingData()` | Lit les données de suivi |
+| `computeEventHash()` | Génère hash MD5 stable |
+| `createCalendarEvent()` | Crée un événement |
+| `updateCalendarEvent()` | Met à jour un événement |
+| `deleteCalendarEvent()` | Supprime un événement |
+| `writeSyncTracking()` | Écrit les données de suivi |
+| `scheduleGoogleCalendarSync()` | Planifie sync avec debounce |
+
+### Critères de succès - Google Calendar
+
+- [x] Événements avec "Sur site CCFHK = Oui" apparaissent dans Google Calendar
+- [x] Changements synchronisés dans les 60 secondes après modification
+- [x] Événements supprimés/non marqués retirés du Calendar
+- [x] Tags département `[[[NOM]]]` dans la description
+- [x] Pas d'événements dupliqués
+- [x] Sync survit aux erreurs API
+- [x] Sync manuelle disponible via menu
+- [x] Support événements avec heures (pas seulement journée entière)
+- [x] Support événements multi-jours
+- [x] Rétrocompatibilité avec colonne "Date" (legacy)

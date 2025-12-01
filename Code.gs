@@ -15,9 +15,14 @@
 // Configuration
 const CONFIG = {
   calendarSheetName: 'Calendrier Unifié',
-  requiredColumns: ['Date', 'Service', 'Évènement'],
+  // Supports both old (Date) and new (Début/Fin) column formats
+  requiredColumns: ['Date', 'Service', 'Évènement'], // Legacy check
+  startColumn: 'Début',  // New: start datetime column
+  endColumn: 'Fin',      // New: end datetime column (optional)
+  dateColumn: 'Date',    // Legacy: fallback if Début not found
   maxEventsPerDay: 8,
   refreshIntervalMinutes: 5,
+  defaultEventDurationHours: 1, // Default duration for timed events without end
   locale: 'fr-FR',
 
   // Academic year runs August to July
@@ -38,7 +43,15 @@ const CONFIG = {
     '🟠', '🩵', '💚', '💛', '🌕',
     '🧡', '💜', '💙', '🩷', '🩶',
     '💚', '🟠', '❤️', '🩷'
-  ]
+  ],
+
+  // Google Calendar Sync settings
+  googleCalendarId: 'c_45b0a97a534d195cca5fde4c9bc29f0d73dd80413b7937243f29166680031f15@group.calendar.google.com',
+  syncTrackingSheetName: '_CalendarSync',
+  syncDebounceSeconds: 30,
+
+  // Error tracking
+  errorSheetName: 'Erreurs'
 };
 
 // ============================================================================
@@ -150,6 +163,192 @@ function buildEmojiMap() {
 }
 
 // ============================================================================
+// ERROR TRACKING
+// ============================================================================
+
+/**
+ * Gets or creates the error tracking sheet
+ * @returns {Sheet} The error sheet
+ */
+function getErrorSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let errorSheet = ss.getSheetByName(CONFIG.errorSheetName);
+
+  if (!errorSheet) {
+    errorSheet = ss.insertSheet(CONFIG.errorSheetName);
+    // Set up headers
+    errorSheet.getRange('A1:F1').setValues([['Horodatage', 'Type', 'Département', 'Ligne', 'Description', 'Détails']]);
+    errorSheet.getRange('A1:F1').setFontWeight('bold').setBackground('#F3F4F6');
+    // Set column widths
+    errorSheet.setColumnWidth(1, 150); // Horodatage
+    errorSheet.setColumnWidth(2, 100); // Type
+    errorSheet.setColumnWidth(3, 120); // Département
+    errorSheet.setColumnWidth(4, 60);  // Ligne
+    errorSheet.setColumnWidth(5, 250); // Description
+    errorSheet.setColumnWidth(6, 300); // Détails
+    errorSheet.setFrozenRows(1);
+  }
+
+  return errorSheet;
+}
+
+/**
+ * Logs an error to the error sheet
+ * @param {string} type - Error type (e.g., 'DONNÉES', 'SYNC_GCAL', 'PARSING')
+ * @param {string} department - Department name (or empty)
+ * @param {number|string} row - Row number (or empty)
+ * @param {string} description - Brief error description
+ * @param {string} details - Additional details
+ */
+function logError(type, department, row, description, details) {
+  try {
+    const errorSheet = getErrorSheet();
+    const timestamp = new Date().toLocaleString(CONFIG.locale);
+    errorSheet.appendRow([timestamp, type, department || '', row || '', description, details || '']);
+  } catch (e) {
+    // Fallback to Logger if error sheet fails
+    Logger.log(`ERROR [${type}]: ${description} - ${details}`);
+  }
+}
+
+/**
+ * Clears all errors from the error sheet (keeps header)
+ */
+function clearErrors() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const errorSheet = ss.getSheetByName(CONFIG.errorSheetName);
+
+  if (errorSheet) {
+    const lastRow = errorSheet.getLastRow();
+    if (lastRow > 1) {
+      errorSheet.getRange(2, 1, lastRow - 1, 6).clear();
+    }
+  }
+
+  // Show confirmation
+  try {
+    SpreadsheetApp.getUi().alert('Erreurs effacées', 'Toutes les erreurs ont été supprimées.', SpreadsheetApp.getUi().ButtonSet.OK);
+  } catch (e) {
+    Logger.log('Erreurs effacées');
+  }
+}
+
+/**
+ * Shows the error sheet
+ */
+function showErrors() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let errorSheet = ss.getSheetByName(CONFIG.errorSheetName);
+
+  if (!errorSheet) {
+    errorSheet = getErrorSheet();
+  }
+
+  ss.setActiveSheet(errorSheet);
+}
+
+/**
+ * Gets error count
+ * @returns {number} Number of errors logged
+ */
+function getErrorCount() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const errorSheet = ss.getSheetByName(CONFIG.errorSheetName);
+
+  if (!errorSheet) {
+    return 0;
+  }
+
+  return Math.max(0, errorSheet.getLastRow() - 1);
+}
+
+/**
+ * Clears errors of a specific type from the error sheet
+ * Used at the start of operations to clear stale errors of that type
+ * @param {string} type - Error type to clear (e.g., 'DONNÉES', 'SYNC_GCAL')
+ */
+function clearErrorsByType(type) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const errorSheet = ss.getSheetByName(CONFIG.errorSheetName);
+
+  if (!errorSheet) {
+    return;
+  }
+
+  const lastRow = errorSheet.getLastRow();
+  if (lastRow <= 1) {
+    return; // Only header, nothing to clear
+  }
+
+  // Get all data (skip header)
+  const data = errorSheet.getRange(2, 1, lastRow - 1, 6).getValues();
+
+  // Filter out rows matching the type
+  const rowsToKeep = data.filter(row => row[1] !== type);
+
+  // Clear the data area
+  errorSheet.getRange(2, 1, lastRow - 1, 6).clear();
+
+  // Write back rows to keep
+  if (rowsToKeep.length > 0) {
+    errorSheet.getRange(2, 1, rowsToKeep.length, 6).setValues(rowsToKeep);
+  }
+}
+
+// ============================================================================
+// DEBUG FUNCTIONS
+// ============================================================================
+
+/**
+ * Debug function to check which sheets are detected as departments
+ * Run this from Apps Script editor and check View > Logs
+ */
+function debugSheetDetection() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+
+  Logger.log('=== Sheet Detection Debug ===');
+
+  sheets.forEach(sheet => {
+    const name = sheet.getName();
+
+    // Skip system sheets
+    if (name === CONFIG.calendarSheetName ||
+        name === CONFIG.syncTrackingSheetName ||
+        name === CONFIG.errorSheetName) {
+      Logger.log(name + ': [SYSTEM SHEET - SKIPPED]');
+      return;
+    }
+
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < 1) {
+      Logger.log(name + ': [EMPTY SHEET]');
+      return;
+    }
+
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+
+    const hasDate = headers.includes(CONFIG.dateColumn);
+    const hasDebut = headers.includes(CONFIG.startColumn);
+    const hasService = headers.includes('Service');
+    const hasEvent = headers.some(h => isEventColumn(h));
+
+    const eventColName = headers.find(h => isEventColumn(h)) || 'NOT FOUND';
+
+    Logger.log(name + ':');
+    Logger.log('  - Has Date: ' + hasDate + ' | Has Début: ' + hasDebut);
+    Logger.log('  - Has Service: ' + hasService);
+    Logger.log('  - Has Event column: ' + hasEvent + ' (' + eventColName + ')');
+    Logger.log('  - VALID DEPARTMENT: ' + ((hasDate || hasDebut) && hasService && hasEvent));
+  });
+
+  Logger.log('=== Detected Departments ===');
+  const depts = getDepartmentNames(true);
+  Logger.log('Count: ' + depts.length);
+  Logger.log('Names: ' + JSON.stringify(depts));
+}
+
+// ============================================================================
 // MAIN ENTRY POINTS
 // ============================================================================
 
@@ -162,6 +361,11 @@ function onOpen() {
     .addItem('Mettre à jour le calendrier', 'renderCalendar')
     .addItem('Filtres par défaut', 'resetFilters')
     .addItem('Installer le calendrier', 'installCalendar')
+    .addSeparator()
+    .addItem('Synchroniser Google Calendar', 'syncToGoogleCalendar')
+    .addSeparator()
+    .addItem('Voir les erreurs', 'showErrors')
+    .addItem('Effacer les erreurs', 'clearErrors')
     .addSeparator()
     .addItem('Configurer rafraîchissement auto', 'setupAutoRefresh')
     .addItem('Désactiver rafraîchissement auto', 'removeAutoRefresh')
@@ -237,6 +441,8 @@ function onEdit(e) {
   if (departments.includes(sheetName)) {
     // Trigger calendar refresh when department data changes
     renderCalendar();
+    // Schedule debounced Google Calendar sync
+    scheduleGoogleCalendarSync();
   }
 }
 
@@ -249,6 +455,9 @@ function installCalendar() {
 
   // Setup auto-refresh trigger
   setupAutoRefresh();
+
+  // Setup installable onEdit trigger (required for scheduleGoogleCalendarSync to work)
+  setupOnEditTrigger();
 
   // Initial render
   renderCalendar();
@@ -284,8 +493,8 @@ function renderCalendar() {
     throw new Error(`Feuille "${CONFIG.calendarSheetName}" introuvable. Exécutez d'abord installCalendar().`);
   }
 
-  // Show loading message immediately (E3 below Refresh checkbox)
-  calSheet.getRange('E3').setValue('Mise à jour en cours...');
+  // Show loading message immediately (F3 = Sheets calendar status)
+  calSheet.getRange('F3').setValue('En cours...');
   SpreadsheetApp.flush(); // Force immediate UI update
 
   // Read filter values
@@ -312,8 +521,8 @@ function renderCalendar() {
     applyFormatting(calSheet, startRow, formatInfo, filteredEvents);
   }
 
-  // Update timestamp (E3 below Refresh checkbox)
-  calSheet.getRange('E3').setValue('Mis à jour: ' + new Date().toLocaleString(CONFIG.locale));
+  // Update timestamp (F3 = Sheets calendar status)
+  calSheet.getRange('F3').setValue(new Date().toLocaleString(CONFIG.locale));
 }
 
 // ============================================================================
@@ -321,10 +530,59 @@ function renderCalendar() {
 // ============================================================================
 
 /**
+ * Checks if a datetime value has a time component (not just a date)
+ * In Google Sheets, dates are stored as numbers where the fractional part is the time
+ * @param {Date|number} value - Date object or sheet numeric value
+ * @returns {boolean} True if the value has a time component
+ */
+function hasTimeComponent(value) {
+  if (value instanceof Date) {
+    // Check if hours, minutes, or seconds are non-zero
+    return value.getHours() !== 0 || value.getMinutes() !== 0 || value.getSeconds() !== 0;
+  }
+  if (typeof value === 'number') {
+    // Fractional part indicates time
+    return (value % 1) !== 0;
+  }
+  return false;
+}
+
+/**
+ * Parses a date/datetime value from a sheet cell
+ * @param {*} value - Cell value (Date, number, or string)
+ * @returns {Object|null} { date: Date, hasTime: boolean } or null if invalid
+ */
+function parseDateTimeValue(value) {
+  if (!value) return null;
+
+  let date;
+  let hasTime = false;
+
+  if (value instanceof Date) {
+    date = value;
+    hasTime = hasTimeComponent(value);
+  } else if (typeof value === 'number') {
+    // Sheet serial date
+    hasTime = hasTimeComponent(value);
+    date = new Date(value);
+  } else {
+    date = new Date(value);
+  }
+
+  if (isNaN(date.getTime())) return null;
+
+  return { date, hasTime };
+}
+
+/**
  * Collects all events from all department sheets
+ * Supports both legacy Date column and new Début/Fin columns
  * @returns {Array} Array of event objects
  */
 function getAllEvents() {
+  // Clear previous data errors before collecting new ones
+  clearErrorsByType('DONNÉES');
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = ss.getSheets();
   const events = [];
@@ -333,16 +591,21 @@ function getAllEvents() {
     const sheetName = sheet.getName();
     const sheetId = sheet.getSheetId();
 
-    // Skip the calendar sheet itself
+    // Skip system sheets (calendar, sync tracking, errors)
     if (sheetName === CONFIG.calendarSheetName) return;
+    if (sheetName === CONFIG.syncTrackingSheetName) return;
+    if (sheetName === CONFIG.errorSheetName) return;
 
     const data = sheet.getDataRange().getValues();
     if (data.length < 2) return; // Need at least header + 1 row
 
     const headers = data[0].map(h => String(h).trim());
 
-    // Find required column indices (flexible with accents for Evenement)
-    const dateCol = headers.indexOf('Date');
+    // Find column indices - try new format first, fall back to legacy
+    const startCol = headers.indexOf(CONFIG.startColumn);  // Début
+    const endCol = headers.indexOf(CONFIG.endColumn);      // Fin
+    const legacyDateCol = headers.indexOf(CONFIG.dateColumn); // Date (legacy)
+
     const serviceCol = headers.indexOf('Service');
     const eventCol = headers.findIndex(h => isEventColumn(h));
 
@@ -350,32 +613,57 @@ function getAllEvents() {
     const surSiteCol = headers.findIndex(h => isSurSiteColumn(h));
     const surCalendrierCol = headers.findIndex(h => isSurCalendrierColumn(h));
 
-    // Skip sheets without required columns
-    if (dateCol === -1 || serviceCol === -1 || eventCol === -1) {
+    // Determine which date column to use
+    const useLegacy = startCol === -1 && legacyDateCol !== -1;
+    const dateColIndex = useLegacy ? legacyDateCol : startCol;
+
+    // Skip sheets without required columns (need either Date or Début, plus Service and Event)
+    if (dateColIndex === -1 || serviceCol === -1 || eventCol === -1) {
       return;
     }
 
     // Process data rows
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      const dateValue = row[dateCol];
-
-      // Skip empty dates
-      if (!dateValue) continue;
-
-      // Parse date
-      let date;
-      if (dateValue instanceof Date) {
-        date = dateValue;
-      } else {
-        date = new Date(dateValue);
-      }
-
-      // Skip invalid dates
-      if (isNaN(date.getTime())) continue;
+      const rowNum = i + 1; // 1-indexed for display
 
       const service = String(row[serviceCol] || '').trim();
       const eventName = String(row[eventCol] || '').trim();
+      const rawDateValue = row[dateColIndex];
+
+      // Parse start date/time
+      const startParsed = parseDateTimeValue(rawDateValue);
+
+      // Log error if event name exists but date is invalid/missing
+      if (!startParsed && eventName) {
+        logError(
+          'DONNÉES',
+          sheetName,
+          rowNum,
+          'Date manquante ou invalide',
+          `Événement: "${eventName}", Valeur date: "${rawDateValue || '(vide)'}"`
+        );
+        continue;
+      }
+
+      // Skip empty rows (no date)
+      if (!startParsed) continue;
+
+      // Parse end date/time (if column exists and has value)
+      let endParsed = null;
+      if (!useLegacy && endCol !== -1 && row[endCol]) {
+        endParsed = parseDateTimeValue(row[endCol]);
+        // Log if end date is invalid but present
+        if (!endParsed) {
+          logError(
+            'DONNÉES',
+            sheetName,
+            rowNum,
+            'Date de fin invalide',
+            `Événement: "${eventName}", Valeur fin: "${row[endCol]}"`
+          );
+        }
+      }
 
       // Read optional filter columns (empty = false/No)
       const surSiteCCFHK = surSiteCol !== -1 ? toBooleanFilter(row[surSiteCol]) : false;
@@ -383,11 +671,26 @@ function getAllEvents() {
       // Track raw value for Sur calendrier excel (to distinguish blank vs explicit Non)
       const surCalendrierExcelRaw = surCalendrierCol !== -1 ? String(row[surCalendrierCol] || '').trim().toLowerCase() : '';
 
-      // Skip if no event name
-      if (!eventName) continue;
+      // Log error if date exists but event name is missing
+      if (!eventName) {
+        logError(
+          'DONNÉES',
+          sheetName,
+          rowNum,
+          'Nom d\'événement manquant',
+          `Date: ${startParsed.date.toLocaleDateString(CONFIG.locale)}, Service: "${service || '(vide)'}"`
+        );
+        continue;
+      }
 
       events.push({
-        date: date,
+        // Legacy compatibility: keep 'date' for existing code that uses it
+        date: startParsed.date,
+        // New fields for datetime support
+        startDate: startParsed.date,
+        endDate: endParsed ? endParsed.date : null,
+        hasTime: startParsed.hasTime || (endParsed && endParsed.hasTime),
+        // Other fields
         service: service,
         event: eventName,
         department: sheetName,
@@ -400,8 +703,8 @@ function getAllEvents() {
     }
   });
 
-  // Sort by date
-  events.sort((a, b) => a.date - b.date);
+  // Sort by start date
+  events.sort((a, b) => a.startDate - b.startDate);
 
   return events;
 }
@@ -762,6 +1065,17 @@ function generateMonthGrid(year, month, eventsByDay, emojiMap) {
 }
 
 /**
+ * Formats time for display (HH:MM format)
+ * @param {Date} date - Date object
+ * @returns {string} Time string like "14:30"
+ */
+function formatTimeForDisplay(date) {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+/**
  * Formats a single day cell
  * @param {number} dayNumber
  * @param {Array} events - Events for this day
@@ -779,7 +1093,14 @@ function formatDayCell(dayNumber, events, isToday, emojiMap) {
       const deptEmoji = getDepartmentEmoji(event.department, emojiMap);
       // Get prefix based on Sur calendrier excel status: 🙈 for Non, ❓ for blank, dept emoji for Oui
       const prefix = getCalendarStatusPrefix(event, deptEmoji);
-      const eventText = event.service ? `${event.service} | ${event.event}` : event.event;
+
+      // Build event text with optional time prefix
+      let eventText = '';
+      if (event.hasTime) {
+        eventText = formatTimeForDisplay(event.startDate) + ' ';
+      }
+      eventText += event.service ? `${event.service} | ${event.event}` : event.event;
+
       display += '\n' + prefix + ' ' + eventText;
     });
 
@@ -846,7 +1167,10 @@ function setupCalendarSheet() {
   calSheet.getRange('F2').insertCheckboxes();
   calSheet.getRange('F2').setValue(false);
   calSheet.getRange('F2').setHorizontalAlignment('left');
-  // E3 will show timestamp
+
+  // --- ROW 3-4: Status labels ---
+  calSheet.getRange('E3').setValue('MAJ Calendrier Sheets:');
+  calSheet.getRange('E4').setValue('MAJ Google Calendar:');
 
   // Year dropdown (B1)
   const currentYear = new Date().getFullYear();
@@ -917,6 +1241,7 @@ let cachedDepartmentNames = null;
 
 /**
  * Gets list of department sheet names (cached within a render cycle)
+ * Supports both legacy (Date) and new (Début) column formats
  * @param {boolean} forceRefresh - Force refresh the cache
  * @returns {Array} Department names
  */
@@ -931,7 +1256,10 @@ function getDepartmentNames(forceRefresh = false) {
 
   sheets.forEach(sheet => {
     const name = sheet.getName();
+    // Skip system sheets
     if (name === CONFIG.calendarSheetName) return;
+    if (name === CONFIG.syncTrackingSheetName) return;
+    if (name === CONFIG.errorSheetName) return;
 
     // Only read first row for headers (optimization)
     const lastCol = sheet.getLastColumn();
@@ -940,11 +1268,12 @@ function getDepartmentNames(forceRefresh = false) {
     const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
 
     // Check for required columns (flexible with accents for Evenement)
-    const hasDate = headers.includes('Date');
+    // Accept either Date (legacy) or Début (new) column
+    const hasDateOrDebut = headers.includes(CONFIG.dateColumn) || headers.includes(CONFIG.startColumn);
     const hasService = headers.includes('Service');
     const hasEvent = headers.some(h => isEventColumn(h));
 
-    if (hasDate && hasService && hasEvent) {
+    if (hasDateOrDebut && hasService && hasEvent) {
       departments.push(name);
     }
   });
@@ -1113,7 +1442,14 @@ function buildRichTextWithLinksOptimized(cell, ssUrl, emojiMap) {
       const deptEmoji = emojiMap[event.department] || '⚪';
       // Get prefix based on Sur calendrier excel status: 🙈 for Non, ❓ for blank, dept emoji for Oui
       const prefix = getCalendarStatusPrefix(event, deptEmoji);
-      const eventText = event.service ? `${event.service} | ${event.event}` : event.event;
+
+      // Build event text with optional time prefix
+      let eventText = '';
+      if (event.hasTime) {
+        eventText = formatTimeForDisplay(event.startDate) + ' ';
+      }
+      eventText += event.service ? `${event.service} | ${event.event}` : event.event;
+
       const fullEventText = prefix + ' ' + eventText;
       const startPos = text.length + 1;
       text += '\n' + fullEventText;
@@ -1179,4 +1515,397 @@ function removeAutoRefresh() {
       ScriptApp.deleteTrigger(trigger);
     }
   });
+}
+
+/**
+ * Sets up installable onEdit trigger
+ * Required because simple onEdit triggers cannot create other triggers
+ */
+function setupOnEditTrigger() {
+  // Remove existing onEdit triggers first
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'onEdit') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  // Create new installable onEdit trigger
+  ScriptApp.newTrigger('onEdit')
+    .forSpreadsheet(SpreadsheetApp.getActive())
+    .onEdit()
+    .create();
+}
+
+// ============================================================================
+// GOOGLE CALENDAR SYNC
+// ============================================================================
+
+/**
+ * Gets the Google Calendar by ID from CONFIG
+ * @returns {Calendar} Google Calendar object
+ */
+function getCalendar() {
+  return CalendarApp.getCalendarById(CONFIG.googleCalendarId);
+}
+
+/**
+ * Sets up the sync tracking sheet if it doesn't exist
+ * @returns {Sheet} The sync tracking sheet
+ */
+function setupSyncSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let syncSheet = ss.getSheetByName(CONFIG.syncTrackingSheetName);
+
+  if (!syncSheet) {
+    syncSheet = ss.insertSheet(CONFIG.syncTrackingSheetName);
+    // Set up headers
+    syncSheet.getRange('A1:E1').setValues([['eventHash', 'gcalEventId', 'department', 'eventDate', 'lastSynced']]);
+    syncSheet.getRange('A1:E1').setFontWeight('bold');
+    // Hide the sheet (it's for internal tracking)
+    syncSheet.hideSheet();
+  }
+
+  return syncSheet;
+}
+
+/**
+ * Computes MD5 hash for an event (deterministic ID)
+ * Includes start/end datetime for proper change detection
+ * @param {Object} event - Event object with department, startDate, endDate, service, event
+ * @returns {string} MD5 hash string
+ */
+function computeEventHash(event) {
+  // Use ISO format for full datetime precision
+  const startStr = event.startDate.toISOString();
+  const endStr = event.endDate ? event.endDate.toISOString() : '';
+  // Include surSiteCCFHK in hash so toggling it triggers resync
+  const surSiteStr = event.surSiteCCFHK ? '1' : '0';
+  const input = event.department + '|' + startStr + '|' + endStr + '|' + event.service + '|' + event.event + '|' + surSiteStr;
+  const rawHash = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, input);
+  // Convert to hex string
+  return rawHash.map(byte => {
+    const hex = (byte < 0 ? byte + 256 : byte).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('');
+}
+
+/**
+ * Reads sync tracking data from the tracking sheet
+ * @returns {Map} Map of eventHash -> { gcalEventId, department, eventDate, lastSynced }
+ */
+function getSyncTrackingData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const syncSheet = ss.getSheetByName(CONFIG.syncTrackingSheetName);
+
+  if (!syncSheet) {
+    return new Map();
+  }
+
+  const data = syncSheet.getDataRange().getValues();
+  const trackingMap = new Map();
+
+  // Skip header row
+  for (let i = 1; i < data.length; i++) {
+    const [hash, gcalId, dept, date, lastSynced] = data[i];
+    if (hash) {
+      trackingMap.set(hash, {
+        gcalEventId: gcalId,
+        department: dept,
+        eventDate: date,
+        lastSynced: lastSynced
+      });
+    }
+  }
+
+  return trackingMap;
+}
+
+/**
+ * Writes sync tracking data to the tracking sheet
+ * @param {Map} trackingMap - Map of eventHash -> tracking data
+ */
+function writeSyncTracking(trackingMap) {
+  const syncSheet = setupSyncSheet();
+
+  // Clear existing data (keep header)
+  const lastRow = syncSheet.getLastRow();
+  if (lastRow > 1) {
+    syncSheet.getRange(2, 1, lastRow - 1, 5).clear();
+  }
+
+  // Write new data
+  if (trackingMap.size > 0) {
+    const rows = [];
+    trackingMap.forEach((value, hash) => {
+      rows.push([hash, value.gcalEventId, value.department, value.eventDate, value.lastSynced]);
+    });
+    syncSheet.getRange(2, 1, rows.length, 5).setValues(rows);
+  }
+}
+
+/**
+ * Creates a Google Calendar event
+ * Supports timed events, all-day events, and multi-day events
+ * @param {Calendar} calendar - Google Calendar
+ * @param {Object} event - Event object with startDate, endDate, hasTime
+ * @returns {string} Google Calendar event ID
+ */
+function createCalendarEvent(calendar, event) {
+  const title = event.service ? `${event.service} | ${event.event}` : event.event;
+  const description = `[[[${event.department}]]]\n\nSource: CCFHK Events`;
+
+  let gcalEvent;
+
+  if (event.hasTime) {
+    // Timed event
+    let endTime;
+    if (event.endDate) {
+      endTime = event.endDate;
+    } else {
+      // Default duration if no end time specified
+      endTime = new Date(event.startDate.getTime() + CONFIG.defaultEventDurationHours * 60 * 60 * 1000);
+    }
+    gcalEvent = calendar.createEvent(title, event.startDate, endTime, {
+      description: description
+    });
+  } else {
+    // All-day event
+    if (event.endDate) {
+      // Multi-day all-day event
+      // Google Calendar end date is exclusive, so add 1 day
+      const exclusiveEnd = new Date(event.endDate);
+      exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+      gcalEvent = calendar.createAllDayEvent(title, event.startDate, exclusiveEnd, {
+        description: description
+      });
+    } else {
+      // Single day all-day event
+      gcalEvent = calendar.createAllDayEvent(title, event.startDate, {
+        description: description
+      });
+    }
+  }
+
+  return gcalEvent.getId();
+}
+
+/**
+ * Updates a Google Calendar event
+ * Supports timed events, all-day events, and multi-day events
+ * @param {Calendar} calendar - Google Calendar
+ * @param {string} gcalEventId - Google Calendar event ID
+ * @param {Object} event - Event object with startDate, endDate, hasTime
+ * @returns {boolean} True if updated successfully
+ */
+function updateCalendarEvent(calendar, gcalEventId, event) {
+  try {
+    const gcalEvent = calendar.getEventById(gcalEventId);
+    if (!gcalEvent) {
+      return false;
+    }
+
+    const title = event.service ? `${event.service} | ${event.event}` : event.event;
+    const description = `[[[${event.department}]]]\n\nSource: CCFHK Events`;
+
+    gcalEvent.setTitle(title);
+    gcalEvent.setDescription(description);
+
+    if (event.hasTime) {
+      // Timed event
+      let endTime;
+      if (event.endDate) {
+        endTime = event.endDate;
+      } else {
+        // Default duration if no end time specified
+        endTime = new Date(event.startDate.getTime() + CONFIG.defaultEventDurationHours * 60 * 60 * 1000);
+      }
+      gcalEvent.setTime(event.startDate, endTime);
+    } else {
+      // All-day event
+      if (event.endDate) {
+        // Multi-day all-day event
+        // Google Calendar end date is exclusive, so add 1 day
+        const exclusiveEnd = new Date(event.endDate);
+        exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
+        gcalEvent.setAllDayDates(event.startDate, exclusiveEnd);
+      } else {
+        // Single day all-day event
+        gcalEvent.setAllDayDate(event.startDate);
+      }
+    }
+
+    return true;
+  } catch (e) {
+    Logger.log('Error updating event: ' + e.message);
+    return false;
+  }
+}
+
+/**
+ * Deletes a Google Calendar event
+ * @param {Calendar} calendar - Google Calendar
+ * @param {string} gcalEventId - Google Calendar event ID
+ */
+function deleteCalendarEvent(calendar, gcalEventId) {
+  try {
+    const gcalEvent = calendar.getEventById(gcalEventId);
+    if (gcalEvent) {
+      gcalEvent.deleteEvent();
+    }
+  } catch (e) {
+    Logger.log('Error deleting event: ' + e.message);
+  }
+}
+
+/**
+ * Main sync function - syncs events with Sur site CCFHK = Oui to Google Calendar
+ * Uses incremental sync with create/update/delete operations
+ */
+function syncToGoogleCalendar() {
+  // Clear previous sync errors before starting new sync
+  clearErrorsByType('SYNC_GCAL');
+
+  // Show loading state (F4 = Google Calendar status)
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const calSheet = ss.getSheetByName(CONFIG.calendarSheetName);
+  if (calSheet) {
+    calSheet.getRange('F4').setValue('En cours...');
+    SpreadsheetApp.flush();
+  }
+
+  const calendar = getCalendar();
+  if (!calendar) {
+    throw new Error('Calendrier Google introuvable. Vérifiez l\'ID du calendrier dans CONFIG.');
+  }
+
+  // Get all events
+  const allEvents = getAllEvents();
+
+  // Filter for Sur site CCFHK = Oui only
+  const eventsToSync = allEvents.filter(event => event.surSiteCCFHK === true);
+
+  // Get current tracking data
+  const trackingMap = getSyncTrackingData();
+  const seenHashes = new Set();
+  const newTrackingMap = new Map();
+
+  let created = 0;
+  let unchanged = 0;
+  let deleted = 0;
+
+  let syncErrors = 0;
+
+  // Process each event to sync
+  eventsToSync.forEach(event => {
+    const hash = computeEventHash(event);
+    seenHashes.add(hash);
+
+    const existingEntry = trackingMap.get(hash);
+    const eventTitle = event.service ? `${event.service} | ${event.event}` : event.event;
+
+    try {
+      if (existingEntry) {
+        // Hash matches = event data unchanged, skip API call
+        // Just keep the existing tracking entry
+        newTrackingMap.set(hash, existingEntry);
+        unchanged++;
+      } else {
+        // New event or event data changed - create in calendar
+        const gcalEventId = createCalendarEvent(calendar, event);
+        newTrackingMap.set(hash, {
+          gcalEventId: gcalEventId,
+          department: event.department,
+          eventDate: Utilities.formatDate(event.date, 'GMT', 'yyyy-MM-dd'),
+          lastSynced: new Date()
+        });
+        created++;
+      }
+    } catch (e) {
+      // Log sync error
+      logError(
+        'SYNC_GCAL',
+        event.department,
+        event.rowIndex,
+        'Échec synchronisation Google Calendar',
+        `Événement: "${eventTitle}", Erreur: ${e.message}`
+      );
+      syncErrors++;
+    }
+  });
+
+  // Delete events that are no longer in the sync list
+  trackingMap.forEach((value, hash) => {
+    if (!seenHashes.has(hash)) {
+      try {
+        deleteCalendarEvent(calendar, value.gcalEventId);
+        deleted++;
+      } catch (e) {
+        logError(
+          'SYNC_GCAL',
+          value.department,
+          '',
+          'Échec suppression événement',
+          `Date: ${value.eventDate}, Erreur: ${e.message}`
+        );
+        syncErrors++;
+      }
+    }
+  });
+
+  // Write updated tracking data
+  writeSyncTracking(newTrackingMap);
+
+  // Update Google Calendar sync timestamp on calendar sheet
+  updateGoogleCalendarSyncTimestamp();
+
+  Logger.log(`Sync complete: ${created} created, ${unchanged} unchanged, ${deleted} deleted, ${syncErrors} errors`);
+  return { created, unchanged, deleted, errors: syncErrors };
+}
+
+/**
+ * Updates the Google Calendar sync timestamp on the calendar sheet
+ */
+function updateGoogleCalendarSyncTimestamp() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const calSheet = ss.getSheetByName(CONFIG.calendarSheetName);
+  if (calSheet) {
+    calSheet.getRange('F4').setValue(new Date().toLocaleString(CONFIG.locale));
+  }
+}
+
+/**
+ * Schedules a debounced Google Calendar sync
+ * Removes any pending sync trigger and schedules a new one
+ */
+function scheduleGoogleCalendarSync() {
+  // Remove existing pending sync triggers
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'executeDebouncedSync') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  // Schedule new sync after debounce period
+  ScriptApp.newTrigger('executeDebouncedSync')
+    .timeBased()
+    .after(CONFIG.syncDebounceSeconds * 1000)
+    .create();
+}
+
+/**
+ * Executes the debounced sync (called by trigger)
+ */
+function executeDebouncedSync() {
+  // Remove the trigger that called us
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'executeDebouncedSync') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  // Execute sync
+  syncToGoogleCalendar();
 }
