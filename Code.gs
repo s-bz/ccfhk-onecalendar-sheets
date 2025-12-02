@@ -56,7 +56,7 @@ const CONFIG = {
   // School holidays (Hong Kong FIS/LFI calendar)
   schoolHolidays: {
     '2024-2025': [
-      {name: 'Vacances été', start: '2024-08-01', end: '2024-08-25'},
+      {name: 'Vacances été', start: '2024-06-28', end: '2024-08-27'},
       {name: "Vacances d'octobre", start: '2024-10-25', end: '2024-11-01'},
       {name: "Vacances d'hiver", start: '2024-12-23', end: '2025-01-05'},
       {name: 'Vacances Nouvel An chinois', start: '2025-01-29', end: '2025-02-02'},
@@ -64,7 +64,7 @@ const CONFIG = {
       {name: 'Vacances de printemps', start: '2025-05-26', end: '2025-05-29'}
     ],
     '2025-2026': [
-      {name: 'Vacances été', start: '2025-08-01', end: '2025-08-25'},
+      {name: 'Vacances été', start: '2025-06-27', end: '2025-08-27'},
       {name: "Vacances d'octobre", start: '2025-10-24', end: '2025-10-31'},
       {name: "Vacances d'hiver", start: '2025-12-22', end: '2026-01-02'},
       {name: 'Vacances Nouvel An chinois', start: '2026-02-16', end: '2026-02-20'},

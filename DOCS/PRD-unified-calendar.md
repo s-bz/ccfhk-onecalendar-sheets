@@ -119,7 +119,7 @@ Le système inclut automatiquement les **vacances scolaires LFI/FIS** et les **j
 **Année 2025-2026 :**
 
 Vacances scolaires :
-- Vacances d'été : 1 août - 25 août 2025
+- Vacances d'été : 27 juin - 27 août 2025 (fin d'année scolaire 26 juin 2026, rentrée 28 août 2025)
 - Vacances d'octobre : 24 octobre - 31 octobre 2025
 - Vacances d'hiver : 22 décembre 2025 - 2 janvier 2026
 - Vacances Nouvel An chinois : 16 février - 20 février 2026
