@@ -61,7 +61,8 @@ const CONFIG = {
       {name: "Vacances d'hiver", start: '2024-12-23', end: '2025-01-05'},
       {name: 'Vacances Nouvel An chinois', start: '2025-01-29', end: '2025-02-02'},
       {name: 'Vacances de Pâques', start: '2025-04-14', end: '2025-04-27'},
-      {name: 'Vacances de printemps', start: '2025-05-26', end: '2025-05-29'}
+      {name: 'Vacances de printemps', start: '2025-05-26', end: '2025-05-29'},
+      {name: 'Vacances été', start: '2025-06-27', end: '2025-08-27'}
     ],
     '2025-2026': [
       {name: 'Vacances été', start: '2025-06-27', end: '2025-08-27'},
@@ -69,7 +70,8 @@ const CONFIG = {
       {name: "Vacances d'hiver", start: '2025-12-22', end: '2026-01-02'},
       {name: 'Vacances Nouvel An chinois', start: '2026-02-16', end: '2026-02-20'},
       {name: 'Vacances de Pâques', start: '2026-03-30', end: '2026-04-10'},
-      {name: 'Vacances de printemps', start: '2026-05-26', end: '2026-05-29'}
+      {name: 'Vacances de printemps', start: '2026-05-26', end: '2026-05-29'},
+      {name: 'Vacances été', start: '2026-06-26', end: '2026-08-26'}
     ]
   },
 
