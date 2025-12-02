@@ -76,9 +76,9 @@ const CONFIG = {
   // Hong Kong public holidays
   publicHolidays: {
     '2024-2025': [
+      {date: '2024-09-18', name: 'Après Mi-automne'},
       {date: '2024-10-01', name: 'Fête nationale'},
-      {date: '2024-10-11', name: 'Fête mi-automne'},
-      {date: '2024-10-23', name: 'Chung Yeung'},
+      {date: '2024-10-11', name: 'Chung Yeung'},
       {date: '2024-12-25', name: 'Noël'},
       {date: '2024-12-26', name: 'Boxing Day'},
       {date: '2025-01-01', name: 'Jour de l\'an'},
@@ -96,9 +96,9 @@ const CONFIG = {
     ],
     '2025-2026': [
       {date: '2025-07-01', name: 'Fête SAR HK'},
-      {date: '2025-09-26', name: 'Fête mi-automne'},
       {date: '2025-10-01', name: 'Fête nationale'},
-      {date: '2025-10-19', name: 'Après Chung Yeung'},
+      {date: '2025-10-07', name: 'Après Mi-automne'},
+      {date: '2025-10-29', name: 'Chung Yeung'},
       {date: '2025-12-25', name: 'Noël'},
       {date: '2025-12-26', name: 'Boxing Day'},
       {date: '2026-01-01', name: 'Jour de l\'an'},
