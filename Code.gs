@@ -71,7 +71,7 @@ const CONFIG = {
       {name: 'Vacances Nouvel An chinois', start: '2026-02-16', end: '2026-02-20'},
       {name: 'Vacances de Pâques', start: '2026-03-30', end: '2026-04-10'},
       {name: 'Vacances de printemps', start: '2026-05-26', end: '2026-05-29'},
-      {name: 'Vacances été', start: '2026-06-26', end: '2026-08-26'}
+      {name: 'Vacances été', start: '2026-06-27', end: '2026-08-27'}
     ]
   },
 
