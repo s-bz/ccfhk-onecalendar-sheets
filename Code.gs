@@ -89,9 +89,11 @@ const CONFIG = {
       {date: '2025-04-21', name: 'Lundi Pâques'},
       {date: '2025-05-01', name: 'Fête travail'},
       {date: '2025-05-05', name: 'Bouddha'},
-      {date: '2025-05-31', name: 'Tuen Ng'}
+      {date: '2025-05-31', name: 'Tuen Ng'},
+      {date: '2025-07-01', name: 'Fête SAR HK'}
     ],
     '2025-2026': [
+      {date: '2025-07-01', name: 'Fête SAR HK'},
       {date: '2025-10-01', name: 'Fête nationale'},
       {date: '2025-10-07', name: 'Fête mi-automne'},
       {date: '2025-10-29', name: 'Chung Yeung'},
@@ -106,7 +108,8 @@ const CONFIG = {
       {date: '2026-04-07', name: 'Après Ching Ming'},
       {date: '2026-05-01', name: 'Fête travail'},
       {date: '2026-05-25', name: 'Bouddha'},
-      {date: '2026-06-19', name: 'Tuen Ng'}
+      {date: '2026-06-19', name: 'Tuen Ng'},
+      {date: '2026-07-01', name: 'Fête SAR HK'}
     ]
   },
 
