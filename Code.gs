@@ -51,7 +51,72 @@ const CONFIG = {
   syncDebounceSeconds: 30,
 
   // Error tracking
-  errorSheetName: 'Erreurs'
+  errorSheetName: 'Erreurs',
+
+  // School holidays (Hong Kong FIS/LFI calendar)
+  schoolHolidays: {
+    '2024-2025': [
+      {name: 'Vacances été', start: '2024-08-01', end: '2024-08-25'},
+      {name: "Vacances d'octobre", start: '2024-10-25', end: '2024-11-01'},
+      {name: "Vacances d'hiver", start: '2024-12-23', end: '2025-01-05'},
+      {name: 'Vacances Nouvel An chinois', start: '2025-01-29', end: '2025-02-02'},
+      {name: 'Vacances de Pâques', start: '2025-04-14', end: '2025-04-27'},
+      {name: 'Vacances de printemps', start: '2025-05-26', end: '2025-05-29'}
+    ],
+    '2025-2026': [
+      {name: 'Vacances été', start: '2025-08-01', end: '2025-08-25'},
+      {name: "Vacances d'octobre", start: '2025-10-24', end: '2025-10-31'},
+      {name: "Vacances d'hiver", start: '2025-12-22', end: '2026-01-02'},
+      {name: 'Vacances Nouvel An chinois', start: '2026-02-16', end: '2026-02-20'},
+      {name: 'Vacances de Pâques', start: '2026-03-30', end: '2026-04-10'},
+      {name: 'Vacances de printemps', start: '2026-05-26', end: '2026-05-29'}
+    ]
+  },
+
+  // Hong Kong public holidays
+  publicHolidays: {
+    '2024-2025': [
+      {date: '2024-10-01', name: 'Fête nationale'},
+      {date: '2024-10-11', name: 'Fête mi-automne'},
+      {date: '2024-10-23', name: 'Chung Yeung'},
+      {date: '2024-12-25', name: 'Noël'},
+      {date: '2024-12-26', name: 'Boxing Day'},
+      {date: '2025-01-01', name: 'Jour de l\'an'},
+      {date: '2025-01-29', name: 'Nouvel An chinois'},
+      {date: '2025-04-04', name: 'Ching Ming'},
+      {date: '2025-04-18', name: 'Vendredi saint'},
+      {date: '2025-04-19', name: 'Après Vendredi saint'},
+      {date: '2025-04-21', name: 'Lundi Pâques'},
+      {date: '2025-05-01', name: 'Fête travail'},
+      {date: '2025-05-05', name: 'Bouddha'},
+      {date: '2025-05-31', name: 'Tuen Ng'}
+    ],
+    '2025-2026': [
+      {date: '2025-10-01', name: 'Fête nationale'},
+      {date: '2025-10-07', name: 'Fête mi-automne'},
+      {date: '2025-10-29', name: 'Chung Yeung'},
+      {date: '2025-12-25', name: 'Noël'},
+      {date: '2025-12-26', name: 'Boxing Day'},
+      {date: '2026-01-01', name: 'Jour de l\'an'},
+      {date: '2026-02-17', name: 'Nouvel An chinois'},
+      {date: '2026-04-03', name: 'Vendredi saint'},
+      {date: '2026-04-04', name: 'Après Vendredi saint'},
+      {date: '2026-04-05', name: 'Ching Ming'},
+      {date: '2026-04-06', name: 'Lundi Pâques'},
+      {date: '2026-04-07', name: 'Après Ching Ming'},
+      {date: '2026-05-01', name: 'Fête travail'},
+      {date: '2026-05-25', name: 'Bouddha'},
+      {date: '2026-06-19', name: 'Tuen Ng'}
+    ]
+  },
+
+  // Background colors for calendar cells
+  colors: {
+    saturday: '#E3F2FD',        // Light blue
+    sunday: '#FFE0B2',          // Light orange
+    schoolHoliday: '#E1BEE7',   // Light purple
+    publicHoliday: '#FFCDD2'    // Light red
+  }
 };
 
 // ============================================================================
@@ -126,6 +191,59 @@ function getCalendarStatusPrefix(event, deptEmoji) {
   }
   // Explicit Non - show 🙈 + dept emoji
   return '🙈' + deptEmoji;
+}
+
+/**
+ * Gets the current academic year from the calendar filter
+ * @returns {string} Academic year like "2025-2026"
+ */
+function getCurrentAcademicYear() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const calSheet = ss.getSheetByName(CONFIG.calendarSheetName);
+  if (!calSheet) return '2025-2026'; // default
+
+  const yearFilter = calSheet.getRange('B1').getValue();
+  return yearFilter || '2025-2026';
+}
+
+/**
+ * Checks if a date is a school holiday
+ * @param {Date} date - Date to check
+ * @param {string} academicYear - Academic year like "2025-2026"
+ * @returns {string|null} Holiday name if date is a school holiday, null otherwise
+ */
+function getSchoolHoliday(date, academicYear) {
+  const holidays = CONFIG.schoolHolidays[academicYear];
+  if (!holidays) return null;
+
+  const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+  for (const period of holidays) {
+    if (dateStr >= period.start && dateStr <= period.end) {
+      return period.name;
+    }
+  }
+  return null;
+}
+
+/**
+ * Checks if a date is a public holiday
+ * @param {Date} date - Date to check
+ * @param {string} academicYear - Academic year like "2025-2026"
+ * @returns {string|null} Holiday name if date is a public holiday, null otherwise
+ */
+function getPublicHoliday(date, academicYear) {
+  const holidays = CONFIG.publicHolidays[academicYear];
+  if (!holidays) return null;
+
+  const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+  for (const holiday of holidays) {
+    if (holiday.date === dateStr) {
+      return holiday.name;
+    }
+  }
+  return null;
 }
 
 /**
@@ -1048,7 +1166,7 @@ function generateMonthGrid(year, month, eventsByDay, emojiMap) {
         const dayEvents = eventsByDay[dateKey] || [];
         const isToday = isCurrentMonth && currentDay === todayDate;
 
-        weekRow.push(formatDayCell(currentDay, dayEvents, isToday, emojiMap));
+        weekRow.push(formatDayCell(currentDay, dayEvents, isToday, emojiMap, year, month));
         currentDay++;
       } else {
         weekRow.push({ display: '', events: [], dayNumber: null, isToday: false });
@@ -1081,10 +1199,25 @@ function formatTimeForDisplay(date) {
  * @param {Array} events - Events for this day
  * @param {boolean} isToday - Whether this is today's date
  * @param {Object} emojiMap - Map of department name to emoji
- * @returns {Object} { display: string, events: Array, dayNumber: number, isToday: boolean }
+ * @param {number} year - Year of the date
+ * @param {number} month - Month of the date (0-indexed)
+ * @returns {Object} { display: string, events: Array, dayNumber: number, isToday: boolean, date: Date, schoolHoliday: string|null, publicHoliday: string|null }
  */
-function formatDayCell(dayNumber, events, isToday, emojiMap) {
+function formatDayCell(dayNumber, events, isToday, emojiMap, year, month) {
   let display = String(dayNumber);
+
+  // Check for holidays
+  const date = new Date(year, month, dayNumber);
+  const currentAcademicYear = getCurrentAcademicYear();
+  const schoolHoliday = getSchoolHoliday(date, currentAcademicYear);
+  const publicHoliday = getPublicHoliday(date, currentAcademicYear);
+
+  // Add holiday labels after day number
+  if (publicHoliday) {
+    display += '\nHK PH - ' + publicHoliday;
+  } else if (schoolHoliday) {
+    display += '\nVacances LFI';
+  }
 
   if (events.length > 0) {
     const displayEvents = events.slice(0, CONFIG.maxEventsPerDay);
@@ -1114,7 +1247,10 @@ function formatDayCell(dayNumber, events, isToday, emojiMap) {
     display: display,
     events: events,
     dayNumber: dayNumber,
-    isToday: isToday || false
+    isToday: isToday || false,
+    date: date,
+    schoolHoliday: schoolHoliday,
+    publicHoliday: publicHoliday
   };
 }
 
@@ -1407,7 +1543,39 @@ function applyFormatting(calSheet, startRow, formatInfo, filteredEvents) {
       .setHorizontalAlignment('center');
   });
 
-  // Highlight today's cells
+  // Apply background colors for weekends and holidays
+  formatInfo.forEach(info => {
+    if (info.type === 'dayRow' && info.cells) {
+      const actualRow = startRow + info.row;
+      info.cells.forEach((cell, colIndex) => {
+        if (cell.dayNumber !== null) {
+          const cellRange = calSheet.getRange(actualRow, colIndex + 1);
+
+          // Determine background color based on day type
+          const dayOfWeek = colIndex; // 0=Mon, 6=Sun
+          const isSaturday = dayOfWeek === 5;
+          const isSunday = dayOfWeek === 6;
+
+          let backgroundColor = '#FFFFFF'; // default white
+
+          // Priority: public holiday > school holiday on weekdays > weekends
+          if (cell.publicHoliday) {
+            backgroundColor = CONFIG.colors.publicHoliday;
+          } else if (cell.schoolHoliday && !isSaturday && !isSunday) {
+            backgroundColor = CONFIG.colors.schoolHoliday;
+          } else if (isSaturday) {
+            backgroundColor = CONFIG.colors.saturday;
+          } else if (isSunday) {
+            backgroundColor = CONFIG.colors.sunday;
+          }
+
+          cellRange.setBackground(backgroundColor);
+        }
+      });
+    }
+  });
+
+  // Highlight today's cells (override background color with today's color)
   todayCells.forEach(({ row, col }) => {
     const cellRange = calSheet.getRange(row, col);
     cellRange.setBackground('#BBDEFB');
@@ -1434,6 +1602,13 @@ function buildRichTextWithLinksOptimized(cell, ssUrl, emojiMap) {
   try {
     const builder = SpreadsheetApp.newRichTextValue();
     let text = String(cell.dayNumber);
+
+    // Add holiday labels
+    if (cell.publicHoliday) {
+      text += '\nHK PH - ' + cell.publicHoliday;
+    } else if (cell.schoolHoliday) {
+      text += '\nVacances LFI';
+    }
 
     const displayEvents = cell.events.slice(0, CONFIG.maxEventsPerDay);
     const linkPositions = [];

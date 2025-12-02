@@ -89,6 +89,57 @@ Avantages Apps Script :
   - **Vide/Blanc** : `❓🔴` (point d'interrogation + emoji département)
   - **Non** : `🙈🔴` (singe qui se cache + emoji département)
 
+### Couleurs d'arrière-plan des cellules
+
+Le calendrier utilise des couleurs d'arrière-plan pour identifier visuellement les weekends et les jours fériés :
+
+| Type de jour | Couleur | Code |
+|--------------|---------|------|
+| **Samedi** | Bleu clair | #E3F2FD |
+| **Dimanche** | Orange clair | #FFE0B2 |
+| **Vacances scolaires LFI** (jours de semaine) | Violet clair | #E1BEE7 |
+| **Jours fériés Hong Kong** | Rouge clair | #FFCDD2 |
+| **Jours normaux** | Blanc | #FFFFFF |
+
+**Priorité des couleurs :**
+1. Jours fériés publics → rouge clair
+2. Vacances scolaires (lundi-vendredi) → violet clair
+3. Samedi → bleu clair
+4. Dimanche → orange clair
+
+**Labels dans les cellules :**
+- Jours fériés publics : "HK PH - [nom]" (ex: "HK PH - Noël")
+- Vacances scolaires : "Vacances LFI"
+- Weekend + vacances : couleur weekend + label "Vacances LFI"
+
+### Calendrier des vacances et jours fériés
+
+Le système inclut automatiquement les **vacances scolaires LFI/FIS** et les **jours fériés de Hong Kong** :
+
+**Année 2025-2026 :**
+
+Vacances scolaires :
+- Vacances d'été : 1 août - 25 août 2025
+- Vacances d'octobre : 24 octobre - 31 octobre 2025
+- Vacances d'hiver : 22 décembre 2025 - 2 janvier 2026
+- Vacances Nouvel An chinois : 16 février - 20 février 2026
+- Vacances de Pâques : 30 mars - 10 avril 2026
+- Vacances de printemps : 26 mai - 29 mai 2026
+
+Jours fériés publics :
+- 1 octobre 2025 : Fête nationale
+- 7 octobre 2025 : Fête mi-automne
+- 29 octobre 2025 : Chung Yeung
+- 25-26 décembre 2025 : Noël / Boxing Day
+- 1 janvier 2026 : Jour de l'an
+- 17 février 2026 : Nouvel An chinois
+- 3-7 avril 2026 : Pâques et Ching Ming
+- 1 mai 2026 : Fête du travail
+- 25 mai 2026 : Anniversaire de Bouddha
+- 19 juin 2026 : Tuen Ng
+
+**Note :** Pour mettre à jour les dates pour d'autres années académiques, modifier les objets `CONFIG.schoolHolidays` et `CONFIG.publicHolidays` dans Code.gs.
+
 ### Options de filtres
 
 **Année (B1) :**
