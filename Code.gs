@@ -56,8 +56,11 @@ const CONFIG = {
   // School holidays (Hong Kong FIS/LFI calendar)
   schoolHolidays: {
     '2024-2025': [
-      {name: 'Vacances été', start: '2024-06-28', end: '2024-08-27'},
+      {name: 'Vacances été', start: '2024-06-28', end: '2024-08-26'},
+      {name: 'Formation enseignants', start: '2024-08-27', end: '2024-08-28'},
+      {name: 'Formation enseignants', start: '2024-10-07', end: '2024-10-07'},
       {name: "Vacances d'octobre", start: '2024-10-25', end: '2024-11-01'},
+      {name: 'Formation enseignants', start: '2024-12-09', end: '2024-12-09'},
       {name: "Vacances d'hiver", start: '2024-12-23', end: '2025-01-05'},
       {name: 'Vacances Nouvel An chinois', start: '2025-01-29', end: '2025-02-02'},
       {name: 'Vacances de Pâques', start: '2025-04-14', end: '2025-04-27'},
@@ -65,8 +68,11 @@ const CONFIG = {
       {name: 'Vacances été', start: '2025-06-27', end: '2025-08-27'}
     ],
     '2025-2026': [
-      {name: 'Vacances été', start: '2025-06-27', end: '2025-08-27'},
+      {name: 'Vacances été', start: '2025-06-27', end: '2025-08-25'},
+      {name: 'Formation enseignants', start: '2025-08-26', end: '2025-08-27'},
+      {name: 'Formation enseignants', start: '2025-10-06', end: '2025-10-06'},
       {name: "Vacances d'octobre", start: '2025-10-24', end: '2025-10-31'},
+      {name: 'Formation enseignants', start: '2025-12-08', end: '2025-12-08'},
       {name: "Vacances d'hiver", start: '2025-12-22', end: '2026-01-02'},
       {name: 'Vacances Nouvel An chinois', start: '2026-02-16', end: '2026-02-20'},
       {name: 'Vacances de Pâques', start: '2026-03-30', end: '2026-04-10'},
