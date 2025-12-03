@@ -53,81 +53,21 @@ const CONFIG = {
   // Error tracking
   errorSheetName: 'Erreurs',
 
-  // School holidays (Hong Kong FIS/LFI calendar)
-  schoolHolidays: {
-    '2024-2025': [
-      {name: 'Vacances été', start: '2024-06-28', end: '2024-08-26'},
-      {name: 'Formation enseignants', start: '2024-08-27', end: '2024-08-28'},
-      {name: 'Formation enseignants', start: '2024-10-07', end: '2024-10-07'},
-      {name: "Vacances d'octobre", start: '2024-10-25', end: '2024-11-01'},
-      {name: 'Formation enseignants', start: '2024-12-09', end: '2024-12-09'},
-      {name: "Vacances d'hiver", start: '2024-12-23', end: '2025-01-05'},
-      {name: 'Vacances Nouvel An chinois', start: '2025-01-29', end: '2025-02-02'},
-      {name: 'Vacances de Pâques', start: '2025-04-14', end: '2025-04-27'},
-      {name: 'Vacances de printemps', start: '2025-05-26', end: '2025-05-29'},
-      {name: 'Vacances été', start: '2025-06-27', end: '2025-08-27'}
-    ],
-    '2025-2026': [
-      {name: 'Vacances été', start: '2025-06-27', end: '2025-08-25'},
-      {name: 'Formation enseignants', start: '2025-08-26', end: '2025-08-27'},
-      {name: 'Formation enseignants', start: '2025-10-06', end: '2025-10-06'},
-      {name: "Vacances d'octobre", start: '2025-10-24', end: '2025-10-31'},
-      {name: 'Formation enseignants', start: '2025-12-08', end: '2025-12-08'},
-      {name: "Vacances d'hiver", start: '2025-12-22', end: '2026-01-02'},
-      {name: 'Vacances Nouvel An chinois', start: '2026-02-16', end: '2026-02-20'},
-      {name: 'Vacances de Pâques', start: '2026-03-30', end: '2026-04-10'},
-      {name: 'Vacances de printemps', start: '2026-05-26', end: '2026-05-29'},
-      {name: 'Vacances été', start: '2026-06-27', end: '2026-08-27'}
-    ]
-  },
+  // Special days sheet (replaces hardcoded holidays)
+  specialDaysSheetName: 'Jours spéciaux',
 
-  // Hong Kong public holidays
-  publicHolidays: {
-    '2024-2025': [
-      {date: '2024-09-18', name: 'Après Mi-automne'},
-      {date: '2024-10-01', name: 'Fête nationale'},
-      {date: '2024-10-11', name: 'Chung Yeung'},
-      {date: '2024-12-25', name: 'Noël'},
-      {date: '2024-12-26', name: 'Boxing Day'},
-      {date: '2025-01-01', name: 'Jour de l\'an'},
-      {date: '2025-01-29', name: 'Nouvel An chinois'},
-      {date: '2025-01-30', name: '2e jour Nouvel An chinois'},
-      {date: '2025-01-31', name: '3e jour Nouvel An chinois'},
-      {date: '2025-04-04', name: 'Ching Ming'},
-      {date: '2025-04-18', name: 'Vendredi saint'},
-      {date: '2025-04-19', name: 'Après Vendredi saint'},
-      {date: '2025-04-21', name: 'Lundi Pâques'},
-      {date: '2025-05-01', name: 'Fête travail'},
-      {date: '2025-05-05', name: 'Bouddha'},
-      {date: '2025-05-31', name: 'Tuen Ng'},
-      {date: '2025-07-01', name: 'Fête SAR HK'}
-    ],
-    '2025-2026': [
-      {date: '2025-07-01', name: 'Fête SAR HK'},
-      {date: '2025-10-01', name: 'Fête nationale'},
-      {date: '2025-10-07', name: 'Après Mi-automne'},
-      {date: '2025-10-29', name: 'Chung Yeung'},
-      {date: '2025-12-25', name: 'Noël'},
-      {date: '2025-12-26', name: 'Boxing Day'},
-      {date: '2026-01-01', name: 'Jour de l\'an'},
-      {date: '2026-02-17', name: 'Nouvel An chinois'},
-      {date: '2026-02-18', name: '2e jour Nouvel An chinois'},
-      {date: '2026-02-19', name: '3e jour Nouvel An chinois'},
-      {date: '2026-04-03', name: 'Vendredi saint'},
-      {date: '2026-04-04', name: 'Après Vendredi saint'},
-      {date: '2026-04-06', name: 'Après Ching Ming'},
-      {date: '2026-04-07', name: 'Après Lundi Pâques'},
-      {date: '2026-05-01', name: 'Fête travail'},
-      {date: '2026-05-25', name: 'Bouddha'},
-      {date: '2026-06-19', name: 'Tuen Ng'},
-      {date: '2026-07-01', name: 'Fête SAR HK'}
-    ]
+  // Special day types (in priority order - highest first)
+  specialDayTypes: {
+    'Prêtre absent': { color: '#E0E0E0', label: '🙏 Prêtre absent', priority: 1 },
+    'Jour férié HK': { color: '#FFCDD2', label: 'HK PH', priority: 2 },
+    'Vacances LFI': { color: '#E1BEE7', label: 'Vacances LFI', priority: 3 }
   },
 
   // Background colors for calendar cells
   colors: {
     saturday: '#E3F2FD',        // Light blue
     sunday: '#FFE0B2',          // Light orange
+    priestAbsent: '#E0E0E0',    // Light gray
     schoolHoliday: '#E1BEE7',   // Light purple
     publicHoliday: '#FFCDD2'    // Light red
   }
@@ -220,44 +160,159 @@ function getCurrentAcademicYear() {
   return yearFilter || '2025-2026';
 }
 
+// Cache for special days data (cleared on each render)
+let cachedSpecialDays = null;
+
 /**
- * Checks if a date is a school holiday
+ * Gets all special days from the "Jours spéciaux" sheet
+ * @param {boolean} forceRefresh - Force refresh the cache
+ * @returns {Array} Array of special day objects
+ */
+function getSpecialDays(forceRefresh = false) {
+  if (cachedSpecialDays && !forceRefresh) {
+    return cachedSpecialDays;
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const specialSheet = ss.getSheetByName(CONFIG.specialDaysSheetName);
+
+  if (!specialSheet) {
+    cachedSpecialDays = [];
+    return cachedSpecialDays;
+  }
+
+  const data = specialSheet.getDataRange().getValues();
+  if (data.length < 2) {
+    cachedSpecialDays = [];
+    return cachedSpecialDays;
+  }
+
+  // Expected columns: Type, Nom, Début, Fin, Année scolaire
+  const headers = data[0].map(h => String(h).trim());
+  const typeCol = headers.indexOf('Type');
+  const nomCol = headers.indexOf('Nom');
+  const debutCol = headers.indexOf('Début');
+  const finCol = headers.indexOf('Fin');
+  const anneeCol = headers.indexOf('Année scolaire');
+
+  if (typeCol === -1 || debutCol === -1 || anneeCol === -1) {
+    cachedSpecialDays = [];
+    return cachedSpecialDays;
+  }
+
+  const specialDays = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const type = String(row[typeCol] || '').trim();
+    const nom = nomCol !== -1 ? String(row[nomCol] || '').trim() : '';
+    const debut = row[debutCol];
+    const fin = finCol !== -1 ? row[finCol] : debut;
+    const annee = String(row[anneeCol] || '').trim();
+
+    if (!type || !debut || !annee) continue;
+
+    // Format dates as YYYY-MM-DD strings
+    let startStr, endStr;
+    if (debut instanceof Date) {
+      startStr = Utilities.formatDate(debut, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    } else {
+      startStr = String(debut);
+    }
+
+    if (fin instanceof Date) {
+      endStr = Utilities.formatDate(fin, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    } else if (fin) {
+      endStr = String(fin);
+    } else {
+      endStr = startStr; // Single day if no end date
+    }
+
+    specialDays.push({
+      type: type,
+      name: nom,
+      start: startStr,
+      end: endStr,
+      academicYear: annee
+    });
+  }
+
+  cachedSpecialDays = specialDays;
+  return cachedSpecialDays;
+}
+
+/**
+ * Clears the special days cache
+ */
+function clearSpecialDaysCache() {
+  cachedSpecialDays = null;
+}
+
+/**
+ * Gets all special days for a specific date, sorted by priority
+ * @param {Date} date - Date to check
+ * @param {string} academicYear - Academic year like "2025-2026"
+ * @returns {Array} Array of { type, name, config } objects sorted by priority (highest first)
+ */
+function getSpecialDaysForDate(date, academicYear) {
+  const specialDays = getSpecialDays();
+  const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+  const matching = [];
+
+  for (const day of specialDays) {
+    if (day.academicYear !== academicYear) continue;
+    if (dateStr >= day.start && dateStr <= day.end) {
+      const config = CONFIG.specialDayTypes[day.type];
+      if (config) {
+        matching.push({
+          type: day.type,
+          name: day.name,
+          config: config
+        });
+      }
+    }
+  }
+
+  // Sort by priority (lowest number = highest priority)
+  matching.sort((a, b) => a.config.priority - b.config.priority);
+
+  return matching;
+}
+
+/**
+ * Checks if a date is a school holiday (Vacances LFI)
  * @param {Date} date - Date to check
  * @param {string} academicYear - Academic year like "2025-2026"
  * @returns {string|null} Holiday name if date is a school holiday, null otherwise
  */
 function getSchoolHoliday(date, academicYear) {
-  const holidays = CONFIG.schoolHolidays[academicYear];
-  if (!holidays) return null;
-
-  const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-
-  for (const period of holidays) {
-    if (dateStr >= period.start && dateStr <= period.end) {
-      return period.name;
-    }
-  }
-  return null;
+  const specialDays = getSpecialDaysForDate(date, academicYear);
+  const vacation = specialDays.find(d => d.type === 'Vacances LFI');
+  return vacation ? vacation.name : null;
 }
 
 /**
- * Checks if a date is a public holiday
+ * Checks if a date is a public holiday (Jour férié HK)
  * @param {Date} date - Date to check
  * @param {string} academicYear - Academic year like "2025-2026"
  * @returns {string|null} Holiday name if date is a public holiday, null otherwise
  */
 function getPublicHoliday(date, academicYear) {
-  const holidays = CONFIG.publicHolidays[academicYear];
-  if (!holidays) return null;
+  const specialDays = getSpecialDaysForDate(date, academicYear);
+  const holiday = specialDays.find(d => d.type === 'Jour férié HK');
+  return holiday ? holiday.name : null;
+}
 
-  const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-
-  for (const holiday of holidays) {
-    if (holiday.date === dateStr) {
-      return holiday.name;
-    }
-  }
-  return null;
+/**
+ * Checks if a date is a priest absent day
+ * @param {Date} date - Date to check
+ * @param {string} academicYear - Academic year like "2025-2026"
+ * @returns {string|null} Priest absence name/reason if absent, null otherwise
+ */
+function getPriestAbsent(date, academicYear) {
+  const specialDays = getSpecialDaysForDate(date, academicYear);
+  const absence = specialDays.find(d => d.type === 'Prêtre absent');
+  return absence ? (absence.name || 'Absent') : null;
 }
 
 /**
@@ -501,6 +556,8 @@ function onOpen() {
     .addSeparator()
     .addItem('Configurer rafraîchissement auto', 'setupAutoRefresh')
     .addItem('Désactiver rafraîchissement auto', 'removeAutoRefresh')
+    .addSeparator()
+    .addItem('Créer feuille jours spéciaux', 'setupSpecialDaysSheet')
     .addToUi();
 }
 
@@ -617,6 +674,7 @@ function installCalendar() {
 function renderCalendar() {
   // Clear caches at start of render
   clearDepartmentCache();
+  clearSpecialDaysCache();
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const calSheet = ss.getSheetByName(CONFIG.calendarSheetName);
@@ -1215,23 +1273,31 @@ function formatTimeForDisplay(date) {
  * @param {Object} emojiMap - Map of department name to emoji
  * @param {number} year - Year of the date
  * @param {number} month - Month of the date (0-indexed)
- * @returns {Object} { display: string, events: Array, dayNumber: number, isToday: boolean, date: Date, schoolHoliday: string|null, publicHoliday: string|null }
+ * @returns {Object} Cell object with display, events, special days info
  */
 function formatDayCell(dayNumber, events, isToday, emojiMap, year, month) {
   let display = String(dayNumber);
 
-  // Check for holidays
+  // Check for special days (sorted by priority)
   const date = new Date(year, month, dayNumber);
   const currentAcademicYear = getCurrentAcademicYear();
-  const schoolHoliday = getSchoolHoliday(date, currentAcademicYear);
-  const publicHoliday = getPublicHoliday(date, currentAcademicYear);
+  const specialDays = getSpecialDaysForDate(date, currentAcademicYear);
 
-  // Add holiday labels after day number
-  if (publicHoliday) {
-    display += '\nHK PH - ' + publicHoliday;
-  } else if (schoolHoliday) {
-    display += '\nVacances LFI';
-  }
+  // Extract individual types for backward compatibility
+  const priestAbsent = getPriestAbsent(date, currentAcademicYear);
+  const publicHoliday = getPublicHoliday(date, currentAcademicYear);
+  const schoolHoliday = getSchoolHoliday(date, currentAcademicYear);
+
+  // Add special day labels in priority order (priest absent > HK PH > Vacances LFI)
+  specialDays.forEach(day => {
+    if (day.type === 'Prêtre absent') {
+      display += '\n🙏 Prêtre absent';
+    } else if (day.type === 'Jour férié HK') {
+      display += '\nHK PH - ' + day.name;
+    } else if (day.type === 'Vacances LFI') {
+      display += '\nVacances LFI';
+    }
+  });
 
   if (events.length > 0) {
     const displayEvents = events.slice(0, CONFIG.maxEventsPerDay);
@@ -1263,8 +1329,10 @@ function formatDayCell(dayNumber, events, isToday, emojiMap, year, month) {
     dayNumber: dayNumber,
     isToday: isToday || false,
     date: date,
-    schoolHoliday: schoolHoliday,
-    publicHoliday: publicHoliday
+    specialDays: specialDays,
+    priestAbsent: priestAbsent,
+    publicHoliday: publicHoliday,
+    schoolHoliday: schoolHoliday
   };
 }
 
@@ -1386,6 +1454,149 @@ function setupCalendarSheet() {
   calSheet.setFrozenRows(4);
 }
 
+/**
+ * Sets up the "Jours spéciaux" sheet with headers and initial data
+ * This function can be run to create the sheet and migrate existing data
+ */
+function setupSpecialDaysSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let specialSheet = ss.getSheetByName(CONFIG.specialDaysSheetName);
+
+  // Create sheet if doesn't exist
+  if (!specialSheet) {
+    specialSheet = ss.insertSheet(CONFIG.specialDaysSheetName);
+  } else {
+    // Clear existing content
+    specialSheet.clear();
+  }
+
+  // Set up headers
+  const headers = ['Type', 'Nom', 'Début', 'Fin', 'Année scolaire'];
+  specialSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  specialSheet.getRange(1, 1, 1, headers.length)
+    .setFontWeight('bold')
+    .setBackground('#F3F4F6');
+
+  // Add data validation for Type column
+  const typeOptions = Object.keys(CONFIG.specialDayTypes);
+  const typeRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(typeOptions, true)
+    .build();
+  specialSheet.getRange('A2:A1000').setDataValidation(typeRule);
+
+  // Add data validation for academic year column
+  const currentYear = new Date().getFullYear();
+  const yearOptions = [
+    `${currentYear - 1}-${currentYear}`,
+    `${currentYear}-${currentYear + 1}`,
+    `${currentYear + 1}-${currentYear + 2}`
+  ];
+  const yearRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(yearOptions, true)
+    .build();
+  specialSheet.getRange('E2:E1000').setDataValidation(yearRule);
+
+  // Set column widths
+  specialSheet.setColumnWidth(1, 120);  // Type
+  specialSheet.setColumnWidth(2, 200);  // Nom
+  specialSheet.setColumnWidth(3, 100);  // Début
+  specialSheet.setColumnWidth(4, 100);  // Fin
+  specialSheet.setColumnWidth(5, 120);  // Année scolaire
+
+  // Format date columns
+  specialSheet.getRange('C2:D1000').setNumberFormat('yyyy-mm-dd');
+
+  // Freeze header row
+  specialSheet.setFrozenRows(1);
+
+  // Populate with initial data
+  const initialData = getInitialSpecialDaysData();
+  if (initialData.length > 0) {
+    specialSheet.getRange(2, 1, initialData.length, 5).setValues(initialData);
+  }
+
+  return specialSheet;
+}
+
+/**
+ * Returns initial special days data for migration
+ * @returns {Array} 2D array of [Type, Nom, Début, Fin, Année scolaire]
+ */
+function getInitialSpecialDaysData() {
+  return [
+    // =====================================================================
+    // 2024-2025 - Vacances LFI
+    // =====================================================================
+    ['Vacances LFI', 'Vacances été', '2024-06-28', '2024-08-26', '2024-2025'],
+    ['Vacances LFI', 'Formation enseignants', '2024-08-27', '2024-08-28', '2024-2025'],
+    ['Vacances LFI', 'Formation enseignants', '2024-10-07', '2024-10-07', '2024-2025'],
+    ['Vacances LFI', "Vacances d'octobre", '2024-10-25', '2024-11-01', '2024-2025'],
+    ['Vacances LFI', 'Formation enseignants', '2024-12-09', '2024-12-09', '2024-2025'],
+    ['Vacances LFI', "Vacances d'hiver", '2024-12-23', '2025-01-05', '2024-2025'],
+    ['Vacances LFI', 'Vacances Nouvel An chinois', '2025-01-29', '2025-02-02', '2024-2025'],
+    ['Vacances LFI', 'Vacances de Pâques', '2025-04-14', '2025-04-27', '2024-2025'],
+    ['Vacances LFI', 'Vacances de printemps', '2025-05-26', '2025-05-29', '2024-2025'],
+    ['Vacances LFI', 'Vacances été', '2025-06-27', '2025-08-27', '2024-2025'],
+
+    // =====================================================================
+    // 2024-2025 - Jours fériés HK
+    // =====================================================================
+    ['Jour férié HK', 'Après Mi-automne', '2024-09-18', '2024-09-18', '2024-2025'],
+    ['Jour férié HK', 'Fête nationale', '2024-10-01', '2024-10-01', '2024-2025'],
+    ['Jour férié HK', 'Chung Yeung', '2024-10-11', '2024-10-11', '2024-2025'],
+    ['Jour férié HK', 'Noël', '2024-12-25', '2024-12-25', '2024-2025'],
+    ['Jour férié HK', 'Boxing Day', '2024-12-26', '2024-12-26', '2024-2025'],
+    ['Jour férié HK', "Jour de l'an", '2025-01-01', '2025-01-01', '2024-2025'],
+    ['Jour férié HK', 'Nouvel An chinois', '2025-01-29', '2025-01-29', '2024-2025'],
+    ['Jour férié HK', '2e jour Nouvel An chinois', '2025-01-30', '2025-01-30', '2024-2025'],
+    ['Jour férié HK', '3e jour Nouvel An chinois', '2025-01-31', '2025-01-31', '2024-2025'],
+    ['Jour férié HK', 'Ching Ming', '2025-04-04', '2025-04-04', '2024-2025'],
+    ['Jour férié HK', 'Vendredi saint', '2025-04-18', '2025-04-18', '2024-2025'],
+    ['Jour férié HK', 'Après Vendredi saint', '2025-04-19', '2025-04-19', '2024-2025'],
+    ['Jour férié HK', 'Lundi Pâques', '2025-04-21', '2025-04-21', '2024-2025'],
+    ['Jour férié HK', 'Fête travail', '2025-05-01', '2025-05-01', '2024-2025'],
+    ['Jour férié HK', 'Bouddha', '2025-05-05', '2025-05-05', '2024-2025'],
+    ['Jour férié HK', 'Tuen Ng', '2025-05-31', '2025-05-31', '2024-2025'],
+    ['Jour férié HK', 'Fête SAR HK', '2025-07-01', '2025-07-01', '2024-2025'],
+
+    // =====================================================================
+    // 2025-2026 - Vacances LFI
+    // =====================================================================
+    ['Vacances LFI', 'Vacances été', '2025-06-27', '2025-08-25', '2025-2026'],
+    ['Vacances LFI', 'Formation enseignants', '2025-08-26', '2025-08-27', '2025-2026'],
+    ['Vacances LFI', 'Formation enseignants', '2025-10-06', '2025-10-06', '2025-2026'],
+    ['Vacances LFI', "Vacances d'octobre", '2025-10-24', '2025-10-31', '2025-2026'],
+    ['Vacances LFI', 'Formation enseignants', '2025-12-08', '2025-12-08', '2025-2026'],
+    ['Vacances LFI', "Vacances d'hiver", '2025-12-22', '2026-01-02', '2025-2026'],
+    ['Vacances LFI', 'Vacances Nouvel An chinois', '2026-02-16', '2026-02-20', '2025-2026'],
+    ['Vacances LFI', 'Vacances de Pâques', '2026-03-30', '2026-04-10', '2025-2026'],
+    ['Vacances LFI', 'Vacances de printemps', '2026-05-26', '2026-05-29', '2025-2026'],
+    ['Vacances LFI', 'Vacances été', '2026-06-27', '2026-08-27', '2025-2026'],
+
+    // =====================================================================
+    // 2025-2026 - Jours fériés HK
+    // =====================================================================
+    ['Jour férié HK', 'Fête SAR HK', '2025-07-01', '2025-07-01', '2025-2026'],
+    ['Jour férié HK', 'Fête nationale', '2025-10-01', '2025-10-01', '2025-2026'],
+    ['Jour férié HK', 'Après Mi-automne', '2025-10-07', '2025-10-07', '2025-2026'],
+    ['Jour férié HK', 'Chung Yeung', '2025-10-29', '2025-10-29', '2025-2026'],
+    ['Jour férié HK', 'Noël', '2025-12-25', '2025-12-25', '2025-2026'],
+    ['Jour férié HK', 'Boxing Day', '2025-12-26', '2025-12-26', '2025-2026'],
+    ['Jour férié HK', "Jour de l'an", '2026-01-01', '2026-01-01', '2025-2026'],
+    ['Jour férié HK', 'Nouvel An chinois', '2026-02-17', '2026-02-17', '2025-2026'],
+    ['Jour férié HK', '2e jour Nouvel An chinois', '2026-02-18', '2026-02-18', '2025-2026'],
+    ['Jour férié HK', '3e jour Nouvel An chinois', '2026-02-19', '2026-02-19', '2025-2026'],
+    ['Jour férié HK', 'Vendredi saint', '2026-04-03', '2026-04-03', '2025-2026'],
+    ['Jour férié HK', 'Après Vendredi saint', '2026-04-04', '2026-04-04', '2025-2026'],
+    ['Jour férié HK', 'Après Ching Ming', '2026-04-06', '2026-04-06', '2025-2026'],
+    ['Jour férié HK', 'Après Lundi Pâques', '2026-04-07', '2026-04-07', '2025-2026'],
+    ['Jour férié HK', 'Fête travail', '2026-05-01', '2026-05-01', '2025-2026'],
+    ['Jour férié HK', 'Bouddha', '2026-05-25', '2026-05-25', '2025-2026'],
+    ['Jour férié HK', 'Tuen Ng', '2026-06-19', '2026-06-19', '2025-2026'],
+    ['Jour férié HK', 'Fête SAR HK', '2026-07-01', '2026-07-01', '2025-2026']
+  ];
+}
+
 // Cache for department names (cleared on each render)
 let cachedDepartmentNames = null;
 
@@ -1410,6 +1621,7 @@ function getDepartmentNames(forceRefresh = false) {
     if (name === CONFIG.calendarSheetName) return;
     if (name === CONFIG.syncTrackingSheetName) return;
     if (name === CONFIG.errorSheetName) return;
+    if (name === CONFIG.specialDaysSheetName) return;
 
     // Only read first row for headers (optimization)
     const lastCol = sheet.getLastColumn();
@@ -1557,7 +1769,7 @@ function applyFormatting(calSheet, startRow, formatInfo, filteredEvents) {
       .setHorizontalAlignment('center');
   });
 
-  // Apply background colors for weekends and holidays
+  // Apply background colors for weekends and special days
   formatInfo.forEach(info => {
     if (info.type === 'dayRow' && info.cells) {
       const actualRow = startRow + info.row;
@@ -1572,8 +1784,11 @@ function applyFormatting(calSheet, startRow, formatInfo, filteredEvents) {
 
           let backgroundColor = '#FFFFFF'; // default white
 
-          // Priority: public holiday > school holiday on weekdays > weekends
-          if (cell.publicHoliday) {
+          // NEW Priority: priest absent (always gray, overrides everything) > public holiday > school holiday on weekdays > weekends
+          if (cell.priestAbsent) {
+            // Priest absent takes highest priority - always gray, even on weekends
+            backgroundColor = CONFIG.colors.priestAbsent;
+          } else if (cell.publicHoliday) {
             backgroundColor = CONFIG.colors.publicHoliday;
           } else if (cell.schoolHoliday && !isSaturday && !isSunday) {
             backgroundColor = CONFIG.colors.schoolHoliday;
@@ -1617,11 +1832,17 @@ function buildRichTextWithLinksOptimized(cell, ssUrl, emojiMap) {
     const builder = SpreadsheetApp.newRichTextValue();
     let text = String(cell.dayNumber);
 
-    // Add holiday labels
-    if (cell.publicHoliday) {
-      text += '\nHK PH - ' + cell.publicHoliday;
-    } else if (cell.schoolHoliday) {
-      text += '\nVacances LFI';
+    // Add special day labels in priority order (priest absent > HK PH > Vacances LFI)
+    if (cell.specialDays && cell.specialDays.length > 0) {
+      cell.specialDays.forEach(day => {
+        if (day.type === 'Prêtre absent') {
+          text += '\n🙏 Prêtre absent';
+        } else if (day.type === 'Jour férié HK') {
+          text += '\nHK PH - ' + day.name;
+        } else if (day.type === 'Vacances LFI') {
+          text += '\nVacances LFI';
+        }
+      });
     }
 
     const displayEvents = cell.events.slice(0, CONFIG.maxEventsPerDay);
