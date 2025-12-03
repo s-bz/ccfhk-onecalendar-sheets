@@ -1293,9 +1293,9 @@ function formatDayCell(dayNumber, events, isToday, emojiMap, year, month) {
     if (day.type === 'Prêtre absent') {
       display += '\n🙏 Prêtre absent';
     } else if (day.type === 'Jour férié HK') {
-      display += '\nHK PH - ' + day.name;
+      display += '\n🇭🇰 HK PH - ' + day.name;
     } else if (day.type === 'Vacances LFI') {
-      display += '\nVacances LFI';
+      display += '\n🇫🇷 Vacances LFI';
     }
   });
 
@@ -1838,9 +1838,9 @@ function buildRichTextWithLinksOptimized(cell, ssUrl, emojiMap) {
         if (day.type === 'Prêtre absent') {
           text += '\n🙏 Prêtre absent';
         } else if (day.type === 'Jour férié HK') {
-          text += '\nHK PH - ' + day.name;
+          text += '\n🇭🇰 HK PH - ' + day.name;
         } else if (day.type === 'Vacances LFI') {
-          text += '\nVacances LFI';
+          text += '\n🇫🇷 Vacances LFI';
         }
       });
     }
