@@ -42,7 +42,7 @@ const CONFIG = {
     '🔴', '🟡', '🟢', '🔵', '🟣',
     '🟠', '🩵', '💚', '💛', '🌕',
     '🧡', '💜', '💙', '🩷', '🩶',
-    '💚', '🟠', '❤️', '🩷'
+    '🤎', '🖤', '❤️', '🤍'
   ],
 
   // Google Calendar Sync settings
@@ -70,7 +70,30 @@ const CONFIG = {
     priestAbsent: '#E0E0E0',    // Light gray
     schoolHoliday: '#E1BEE7',   // Light purple
     publicHoliday: '#FFCDD2'    // Light red
-  }
+  },
+
+  // Calendar sheet cell references (centralized for maintainability)
+  cells: {
+    filters: {
+      year: 'B1',
+      timeRange: 'B2',
+      department: 'B3',
+      surCalendrier: 'D1',
+      surSite: 'D2'
+    },
+    checkboxes: {
+      reset: 'F1',
+      refresh: 'F2'
+    },
+    status: {
+      sheetsCalendar: 'F3',
+      googleCalendar: 'F4'
+    }
+  },
+
+  // Bulk operation settings
+  bulkDeleteBatchSize: 50,       // Pause after this many deletions
+  bulkDeletePauseMs: 1000        // Milliseconds to pause between batches
 };
 
 // ============================================================================
@@ -156,7 +179,7 @@ function getCurrentAcademicYear() {
   const calSheet = ss.getSheetByName(CONFIG.calendarSheetName);
   if (!calSheet) return '2025-2026'; // default
 
-  const yearFilter = calSheet.getRange('B1').getValue();
+  const yearFilter = calSheet.getRange(CONFIG.cells.filters.year).getValue();
   return yearFilter || '2025-2026';
 }
 
@@ -576,13 +599,11 @@ function resetFilters() {
   }
 
   // Reset to defaults
-  // Col A-B: Year, Period, Service
-  calSheet.getRange('B1').setValue('2025-2026');
-  calSheet.getRange('B2').setValue('Actuel + À venir');
-  calSheet.getRange('B3').setValue('Tous');
-  // Col C-D: Sur calendrier, Sur site
-  calSheet.getRange('D1').setValue('Oui');
-  calSheet.getRange('D2').setValue('Tous');
+  calSheet.getRange(CONFIG.cells.filters.year).setValue('2025-2026');
+  calSheet.getRange(CONFIG.cells.filters.timeRange).setValue('Actuel + À venir');
+  calSheet.getRange(CONFIG.cells.filters.department).setValue('Tous');
+  calSheet.getRange(CONFIG.cells.filters.surCalendrier).setValue('Oui');
+  calSheet.getRange(CONFIG.cells.filters.surSite).setValue('Tous');
 
   // Refresh calendar with new filter values
   renderCalendar();
@@ -600,20 +621,24 @@ function onEdit(e) {
   if (sheetName === CONFIG.calendarSheetName) {
     const cell = range.getA1Notation();
 
-    // Filter cells:
-    // Col A-B: B1 (Year), B2 (Period), B3 (Service)
-    // Col C-D: D1 (Sur calendrier), D2 (Sur site)
-    const filterCells = ['B1', 'B2', 'B3', 'D1', 'D2'];
+    // Filter cells from CONFIG
+    const filterCells = [
+      CONFIG.cells.filters.year,
+      CONFIG.cells.filters.timeRange,
+      CONFIG.cells.filters.department,
+      CONFIG.cells.filters.surCalendrier,
+      CONFIG.cells.filters.surSite
+    ];
 
-    // Reset checkbox (F1)
-    if (cell === 'F1' && range.getValue() === true) {
+    // Reset checkbox
+    if (cell === CONFIG.cells.checkboxes.reset && range.getValue() === true) {
       range.setValue(false);
       resetFilters();
       return;
     }
 
-    // Refresh checkbox (F2)
-    if (cell === 'F2' && range.getValue() === true) {
+    // Refresh checkbox
+    if (cell === CONFIG.cells.checkboxes.refresh && range.getValue() === true) {
       range.setValue(false);
       renderCalendar();
       return;
@@ -685,8 +710,8 @@ function renderCalendar() {
     throw new Error(`Feuille "${CONFIG.calendarSheetName}" introuvable. Exécutez d'abord installCalendar().`);
   }
 
-  // Show loading message immediately (F3 = Sheets calendar status)
-  calSheet.getRange('F3').setValue('En cours...');
+  // Show loading message immediately
+  calSheet.getRange(CONFIG.cells.status.sheetsCalendar).setValue('En cours...');
   SpreadsheetApp.flush(); // Force immediate UI update
 
   // Read filter values
@@ -713,8 +738,8 @@ function renderCalendar() {
     applyFormatting(calSheet, startRow, formatInfo, filteredEvents);
   }
 
-  // Update timestamp (F3 = Sheets calendar status)
-  calSheet.getRange('F3').setValue(new Date().toLocaleString(CONFIG.locale));
+  // Update timestamp
+  calSheet.getRange(CONFIG.cells.status.sheetsCalendar).setValue(new Date().toLocaleString(CONFIG.locale));
 }
 
 // ============================================================================
@@ -911,15 +936,12 @@ function getAllEvents() {
  * @returns {Object} Filter settings
  */
 function readFilters(calSheet) {
-  // Layout:
-  // Col A-B: A1=Année B1=[year] | A2=Période B2=[period] | A3=Service B3=[dept]
-  // Col C-D: C1=Sur calendrier D1=[oui/non] | C2=Sur site D2=[oui/non]
   return {
-    year: calSheet.getRange('B1').getValue() || '2025-2026',
-    timeRange: calSheet.getRange('B2').getValue() || 'Tout',
-    department: calSheet.getRange('B3').getValue() || 'Tous',
-    surCalendrierExcel: calSheet.getRange('D1').getValue() || 'Oui',
-    surSiteCCFHK: calSheet.getRange('D2').getValue() || 'Tous',
+    year: calSheet.getRange(CONFIG.cells.filters.year).getValue() || '2025-2026',
+    timeRange: calSheet.getRange(CONFIG.cells.filters.timeRange).getValue() || 'Tout',
+    department: calSheet.getRange(CONFIG.cells.filters.department).getValue() || 'Tous',
+    surCalendrierExcel: calSheet.getRange(CONFIG.cells.filters.surCalendrier).getValue() || 'Oui',
+    surSiteCCFHK: calSheet.getRange(CONFIG.cells.filters.surSite).getValue() || 'Tous',
     search: '' // Search removed from UI
   };
 }
@@ -1368,27 +1390,27 @@ function setupCalendarSheet() {
   // Col E-G: Actions + Timestamp
   // ============================================================================
 
-  // --- COLUMN A-B: Time filters ---
+  // --- COLUMN A-B: Time filters (labels in column A) ---
   calSheet.getRange('A1').setValue('Année:');
   calSheet.getRange('A2').setValue('Période:');
   calSheet.getRange('A3').setValue('Service:');
 
-  // --- COLUMN C-D: Content filters ---
+  // --- COLUMN C-D: Content filters (labels in column C) ---
   calSheet.getRange('C1').setValue('Sur calendrier:');
   calSheet.getRange('C2').setValue('Sur site:');
 
-  // --- COLUMN E-F: Actions ---
+  // --- COLUMN E-F: Actions (labels in column E, checkboxes in F) ---
   calSheet.getRange('E1').setValue('Filtres par défaut:');
-  calSheet.getRange('F1').insertCheckboxes();
-  calSheet.getRange('F1').setValue(false);
-  calSheet.getRange('F1').setHorizontalAlignment('left');
+  calSheet.getRange(CONFIG.cells.checkboxes.reset).insertCheckboxes();
+  calSheet.getRange(CONFIG.cells.checkboxes.reset).setValue(false);
+  calSheet.getRange(CONFIG.cells.checkboxes.reset).setHorizontalAlignment('left');
 
   calSheet.getRange('E2').setValue('Mettre à jour:');
-  calSheet.getRange('F2').insertCheckboxes();
-  calSheet.getRange('F2').setValue(false);
-  calSheet.getRange('F2').setHorizontalAlignment('left');
+  calSheet.getRange(CONFIG.cells.checkboxes.refresh).insertCheckboxes();
+  calSheet.getRange(CONFIG.cells.checkboxes.refresh).setValue(false);
+  calSheet.getRange(CONFIG.cells.checkboxes.refresh).setHorizontalAlignment('left');
 
-  // --- ROW 3-4: Status labels ---
+  // --- ROW 3-4: Status labels (status values go in column F) ---
   calSheet.getRange('E3').setValue('MAJ Calendrier Sheets:');
   calSheet.getRange('E4').setValue('MAJ Google Calendar:');
 
@@ -1406,34 +1428,34 @@ function setupCalendarSheet() {
   const yearRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(yearOptions, true)
     .build();
-  calSheet.getRange('B1').setDataValidation(yearRule).setValue(defaultYear);
+  calSheet.getRange(CONFIG.cells.filters.year).setDataValidation(yearRule).setValue(defaultYear);
 
-  // Time range dropdown (B2)
+  // Time range dropdown
   const timeOptions = ['Tout', 'Actuel + À venir', ...CONFIG.monthNames];
   const timeRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(timeOptions, true)
     .build();
-  calSheet.getRange('B2').setDataValidation(timeRule).setValue('Actuel + À venir');
+  calSheet.getRange(CONFIG.cells.filters.timeRange).setDataValidation(timeRule).setValue('Actuel + À venir');
 
-  // Department dropdown (B3)
+  // Department dropdown
   const deptOptions = ['Tous', ...departments.sort()];
   const deptRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(deptOptions, true)
     .build();
-  calSheet.getRange('B3').setDataValidation(deptRule).setValue('Tous');
+  calSheet.getRange(CONFIG.cells.filters.department).setDataValidation(deptRule).setValue('Tous');
 
-  // Sur calendrier excel dropdown (D1) - default Oui
+  // Sur calendrier excel dropdown - default Oui
   const ouiNonOptions = ['Tous', 'Oui', 'Non'];
   const surCalendrierRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(ouiNonOptions, true)
     .build();
-  calSheet.getRange('D1').setDataValidation(surCalendrierRule).setValue('Oui');
+  calSheet.getRange(CONFIG.cells.filters.surCalendrier).setDataValidation(surCalendrierRule).setValue('Oui');
 
-  // Sur site CCFHK dropdown (D2) - default Tous
+  // Sur site CCFHK dropdown - default Tous
   const surSiteRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(ouiNonOptions, true)
     .build();
-  calSheet.getRange('D2').setDataValidation(surSiteRule).setValue('Tous');
+  calSheet.getRange(CONFIG.cells.filters.surSite).setDataValidation(surSiteRule).setValue('Tous');
 
   // Format filter area - labels bold
   calSheet.getRange('A1:A3').setFontWeight('bold');
@@ -1899,10 +1921,7 @@ function writeSyncTracking(trackingMap) {
   const syncSheet = setupSyncSheet();
 
   // Clear existing data (keep header)
-  const lastRow = syncSheet.getLastRow();
-  if (lastRow > 1) {
-    syncSheet.getRange(2, 1, lastRow - 1, 5).clear();
-  }
+  clearSyncTracking(syncSheet);
 
   // Write new data
   if (trackingMap.size > 0) {
@@ -1911,6 +1930,23 @@ function writeSyncTracking(trackingMap) {
       rows.push([hash, value.gcalEventId, value.department, value.eventDate, value.lastSynced]);
     });
     syncSheet.getRange(2, 1, rows.length, 5).setValues(rows);
+  }
+}
+
+/**
+ * Clears all tracking data from the sync sheet (keeps header row)
+ * @param {Sheet} [syncSheet] - Optional sync sheet reference; fetches if not provided
+ */
+function clearSyncTracking(syncSheet) {
+  if (!syncSheet) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    syncSheet = ss.getSheetByName(CONFIG.syncTrackingSheetName);
+  }
+  if (!syncSheet) return;
+
+  const lastRow = syncSheet.getLastRow();
+  if (lastRow > 1) {
+    syncSheet.getRange(2, 1, lastRow - 1, 5).clear();
   }
 }
 
@@ -1961,58 +1997,6 @@ function createCalendarEvent(calendar, event) {
 }
 
 /**
- * Updates a Google Calendar event
- * Supports timed events, all-day events, and multi-day events
- * @param {Calendar} calendar - Google Calendar
- * @param {string} gcalEventId - Google Calendar event ID
- * @param {Object} event - Event object with startDate, endDate, hasTime
- * @returns {boolean} True if updated successfully
- */
-function updateCalendarEvent(calendar, gcalEventId, event) {
-  try {
-    const gcalEvent = calendar.getEventById(gcalEventId);
-    if (!gcalEvent) {
-      return false;
-    }
-
-    const title = event.service ? `${event.service} | ${event.event}` : event.event;
-    const description = `[[[${event.department}]]]\n\nSource: CCFHK Events`;
-
-    gcalEvent.setTitle(title);
-    gcalEvent.setDescription(description);
-
-    if (event.hasTime) {
-      // Timed event
-      let endTime;
-      if (event.endDate) {
-        endTime = event.endDate;
-      } else {
-        // Default duration if no end time specified
-        endTime = new Date(event.startDate.getTime() + CONFIG.defaultEventDurationHours * 60 * 60 * 1000);
-      }
-      gcalEvent.setTime(event.startDate, endTime);
-    } else {
-      // All-day event
-      if (event.endDate) {
-        // Multi-day all-day event
-        // Google Calendar end date is exclusive, so add 1 day
-        const exclusiveEnd = new Date(event.endDate);
-        exclusiveEnd.setDate(exclusiveEnd.getDate() + 1);
-        gcalEvent.setAllDayDates(event.startDate, exclusiveEnd);
-      } else {
-        // Single day all-day event
-        gcalEvent.setAllDayDate(event.startDate);
-      }
-    }
-
-    return true;
-  } catch (e) {
-    Logger.log('Error updating event: ' + e.message);
-    return false;
-  }
-}
-
-/**
  * Deletes a Google Calendar event
  * @param {Calendar} calendar - Google Calendar
  * @param {string} gcalEventId - Google Calendar event ID
@@ -2036,11 +2020,11 @@ function syncToGoogleCalendar() {
   // Clear previous sync errors before starting new sync
   clearErrorsByType('SYNC_GCAL');
 
-  // Show loading state (F4 = Google Calendar status)
+  // Show loading state
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const calSheet = ss.getSheetByName(CONFIG.calendarSheetName);
   if (calSheet) {
-    calSheet.getRange('F4').setValue('En cours...');
+    calSheet.getRange(CONFIG.cells.status.googleCalendar).setValue('En cours...');
     SpreadsheetApp.flush();
   }
 
@@ -2140,7 +2124,7 @@ function updateGoogleCalendarSyncTimestamp() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const calSheet = ss.getSheetByName(CONFIG.calendarSheetName);
   if (calSheet) {
-    calSheet.getRange('F4').setValue(new Date().toLocaleString(CONFIG.locale));
+    calSheet.getRange(CONFIG.cells.status.googleCalendar).setValue(new Date().toLocaleString(CONFIG.locale));
   }
 }
 
@@ -2219,15 +2203,8 @@ function purgeAndResync() {
     }
   });
 
-  // Clear tracking sheet
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const syncSheet = ss.getSheetByName(CONFIG.syncTrackingSheetName);
-  if (syncSheet) {
-    const lastRow = syncSheet.getLastRow();
-    if (lastRow > 1) {
-      syncSheet.getRange(2, 1, lastRow - 1, 5).clear();
-    }
-  }
+  // Clear tracking sheet using helper function
+  clearSyncTracking();
 
   // Now resync
   const syncResult = syncToGoogleCalendar();
@@ -2261,7 +2238,7 @@ function deleteAllCalendarEvents() {
   // Double confirmation
   const confirm = ui.alert(
     'Confirmation finale',
-    'Tapez OUI pour confirmer la suppression de TOUS les événements.',
+    'Cliquez sur Oui pour confirmer la suppression de TOUS les événements.',
     ui.ButtonSet.YES_NO
   );
 
@@ -2276,33 +2253,40 @@ function deleteAllCalendarEvents() {
   }
 
   // Get all events from the calendar (wide date range)
-  const startDate = new Date('2020-01-01');
-  const endDate = new Date('2030-12-31');
+  const currentYear = new Date().getFullYear();
+  const startDate = new Date(currentYear - 5, 0, 1);  // 5 years ago
+  const endDate = new Date(currentYear + 5, 11, 31);  // 5 years ahead
   const allEvents = calendar.getEvents(startDate, endDate);
+
+  // Warn user about large operations
+  if (allEvents.length > 100) {
+    ui.alert(
+      'Grand calendrier détecté',
+      `Ce calendrier contient ${allEvents.length} événements. La suppression peut prendre plusieurs minutes.`,
+      ui.ButtonSet.OK
+    );
+  }
 
   let deleted = 0;
   let errors = 0;
 
-  // Delete each event
-  allEvents.forEach(event => {
+  // Delete each event with rate limiting to avoid API quota issues
+  allEvents.forEach((event, index) => {
     try {
       event.deleteEvent();
       deleted++;
+      // Pause after every batch to avoid rate limiting
+      if (index > 0 && index % CONFIG.bulkDeleteBatchSize === 0) {
+        Utilities.sleep(CONFIG.bulkDeletePauseMs);
+      }
     } catch (e) {
       errors++;
       Logger.log('Error deleting event: ' + e.message);
     }
   });
 
-  // Clear tracking sheet
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const syncSheet = ss.getSheetByName(CONFIG.syncTrackingSheetName);
-  if (syncSheet) {
-    const lastRow = syncSheet.getLastRow();
-    if (lastRow > 1) {
-      syncSheet.getRange(2, 1, lastRow - 1, 5).clear();
-    }
-  }
+  // Clear tracking sheet using helper function
+  clearSyncTracking();
 
   ui.alert(
     'Suppression terminée',
@@ -2328,6 +2312,7 @@ function debugColumnDetection() {
     if (sheetName === CONFIG.calendarSheetName) return;
     if (sheetName === CONFIG.syncTrackingSheetName) return;
     if (sheetName === CONFIG.errorSheetName) return;
+    if (sheetName === CONFIG.specialDaysSheetName) return;
 
     const data = sheet.getDataRange().getValues();
     if (data.length < 1) return;
@@ -2366,16 +2351,27 @@ function debugColumnDetection() {
     });
   });
 
-  // Log to console and show in alert
+  // Log full results to console
   console.log('Column Detection Results:', JSON.stringify(results, null, 2));
 
-  // Build summary for alert
+  // Build summary for alert - show only sheets with issues to avoid truncation
   let summary = 'COLUMN DETECTION RESULTS\n\n';
-  results.forEach(r => {
-    summary += `📄 ${r.sheet}\n`;
-    summary += `   Sur site col: ${r.surSite}\n`;
-    summary += `   Oui count: ${r.surSiteOuiCount} / ${r.totalRows} rows\n\n`;
-  });
+  const problemSheets = results.filter(r => r.surSite.includes('NOT FOUND'));
+
+  if (problemSheets.length === 0) {
+    summary += `✅ Toutes les feuilles ont la bonne structure\n`;
+    summary += `Feuilles analysées: ${results.length}\n`;
+    summary += `Total "Sur site = Oui": ${results.reduce((sum, r) => sum + r.surSiteOuiCount, 0)}\n\n`;
+    summary += 'Voir la console (Ctrl+Entrée) pour les détails.';
+  } else {
+    summary += `⚠️ ${problemSheets.length} feuille(s) avec problèmes:\n\n`;
+    problemSheets.forEach(r => {
+      summary += `📄 ${r.sheet}\n`;
+      summary += `   Sur site col: ${r.surSite}\n\n`;
+    });
+    summary += `\n✅ ${results.length - problemSheets.length} feuille(s) OK\n`;
+    summary += 'Voir la console pour les détails complets.';
+  }
 
   SpreadsheetApp.getUi().alert('Debug: Column Detection', summary, SpreadsheetApp.getUi().ButtonSet.OK);
 
