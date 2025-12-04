@@ -550,12 +550,16 @@ function onOpen() {
     .addItem('Installer le calendrier', 'installCalendar')
     .addSeparator()
     .addItem('Synchroniser Google Calendar', 'syncToGoogleCalendar')
+    .addItem('Purger et resynchroniser', 'purgeAndResync')
+    .addItem('⚠️ Supprimer TOUS les événements', 'deleteAllCalendarEvents')
     .addSeparator()
     .addItem('Voir les erreurs', 'showErrors')
     .addItem('Effacer les erreurs', 'clearErrors')
     .addSeparator()
     .addItem('Configurer rafraîchissement auto', 'setupAutoRefresh')
     .addItem('Désactiver rafraîchissement auto', 'removeAutoRefresh')
+    .addSeparator()
+    .addItem('🔍 Debug: Vérifier colonnes', 'debugColumnDetection')
     .addToUi();
 }
 
@@ -1836,7 +1840,7 @@ function setupSyncSheet() {
 
 /**
  * Computes MD5 hash for an event (deterministic ID)
- * Includes start/end datetime for proper change detection
+ * Content-based hash allows detecting duplicate events
  * @param {Object} event - Event object with department, startDate, endDate, service, event
  * @returns {string} MD5 hash string
  */
@@ -1846,6 +1850,7 @@ function computeEventHash(event) {
   const endStr = event.endDate ? event.endDate.toISOString() : '';
   // Include surSiteCCFHK in hash so toggling it triggers resync
   const surSiteStr = event.surSiteCCFHK ? '1' : '0';
+  // Content-based hash (no row index - allows detecting true duplicates)
   const input = event.department + '|' + startStr + '|' + endStr + '|' + event.service + '|' + event.event + '|' + surSiteStr;
   const rawHash = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, input);
   // Convert to hex string
@@ -2173,4 +2178,206 @@ function executeDebouncedSync() {
 
   // Execute sync
   syncToGoogleCalendar();
+}
+
+/**
+ * Purges all synced events from Google Calendar and clears tracking data
+ * Use this to clean up duplicates and start fresh
+ */
+function purgeAndResync() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'Purger et resynchroniser',
+    'Cette action va supprimer TOUS les événements synchronisés du Google Calendar et les recréer.\n\n' +
+    'Continuer?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  const calendar = getCalendar();
+  if (!calendar) {
+    ui.alert('Erreur', 'Calendrier Google introuvable.', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Get all tracked events
+  const trackingMap = getSyncTrackingData();
+  let deleted = 0;
+  let errors = 0;
+
+  // Delete all tracked events from Google Calendar
+  trackingMap.forEach((value, hash) => {
+    try {
+      deleteCalendarEvent(calendar, value.gcalEventId);
+      deleted++;
+    } catch (e) {
+      errors++;
+      Logger.log('Error deleting event: ' + e.message);
+    }
+  });
+
+  // Clear tracking sheet
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const syncSheet = ss.getSheetByName(CONFIG.syncTrackingSheetName);
+  if (syncSheet) {
+    const lastRow = syncSheet.getLastRow();
+    if (lastRow > 1) {
+      syncSheet.getRange(2, 1, lastRow - 1, 5).clear();
+    }
+  }
+
+  // Now resync
+  const syncResult = syncToGoogleCalendar();
+
+  ui.alert(
+    'Purge terminée',
+    `Supprimés: ${deleted}\nErreurs: ${errors}\n\nResynchronisation:\nCréés: ${syncResult.created}`,
+    ui.ButtonSet.OK
+  );
+}
+
+/**
+ * Nuclear option: Deletes ALL events from the Google Calendar (not just tracked ones)
+ * Use this when there are orphaned duplicates not in the tracking sheet
+ */
+function deleteAllCalendarEvents() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    '⚠️ SUPPRIMER TOUS LES ÉVÉNEMENTS',
+    'ATTENTION: Cette action va supprimer TOUS les événements du Google Calendar CCFHK, ' +
+    'y compris ceux qui ne sont pas suivis par ce script.\n\n' +
+    'Cette opération est IRRÉVERSIBLE.\n\n' +
+    'Voulez-vous vraiment continuer?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  // Double confirmation
+  const confirm = ui.alert(
+    'Confirmation finale',
+    'Tapez OUI pour confirmer la suppression de TOUS les événements.',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (confirm !== ui.Button.YES) {
+    return;
+  }
+
+  const calendar = getCalendar();
+  if (!calendar) {
+    ui.alert('Erreur', 'Calendrier Google introuvable.', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Get all events from the calendar (wide date range)
+  const startDate = new Date('2020-01-01');
+  const endDate = new Date('2030-12-31');
+  const allEvents = calendar.getEvents(startDate, endDate);
+
+  let deleted = 0;
+  let errors = 0;
+
+  // Delete each event
+  allEvents.forEach(event => {
+    try {
+      event.deleteEvent();
+      deleted++;
+    } catch (e) {
+      errors++;
+      Logger.log('Error deleting event: ' + e.message);
+    }
+  });
+
+  // Clear tracking sheet
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const syncSheet = ss.getSheetByName(CONFIG.syncTrackingSheetName);
+  if (syncSheet) {
+    const lastRow = syncSheet.getLastRow();
+    if (lastRow > 1) {
+      syncSheet.getRange(2, 1, lastRow - 1, 5).clear();
+    }
+  }
+
+  ui.alert(
+    'Suppression terminée',
+    `Événements supprimés: ${deleted}\nErreurs: ${errors}\n\n` +
+    'Utilisez "Synchroniser Google Calendar" pour recréer les événements.',
+    ui.ButtonSet.OK
+  );
+}
+
+/**
+ * Debug function to check column detection for all sheets
+ * Shows what columns are being found in each department sheet
+ */
+function debugColumnDetection() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  const results = [];
+
+  sheets.forEach(sheet => {
+    const sheetName = sheet.getName();
+
+    // Skip system sheets
+    if (sheetName === CONFIG.calendarSheetName) return;
+    if (sheetName === CONFIG.syncTrackingSheetName) return;
+    if (sheetName === CONFIG.errorSheetName) return;
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 1) return;
+
+    const headers = data[0].map(h => String(h).trim());
+
+    // Find column indices
+    const startCol = headers.indexOf(CONFIG.startColumn);  // Début
+    const endCol = headers.indexOf(CONFIG.endColumn);      // Fin
+    const serviceCol = headers.indexOf('Service');
+    const eventCol = headers.findIndex(h => isEventColumn(h));
+    const surSiteCol = headers.findIndex(h => isSurSiteColumn(h));
+    const surCalendrierCol = headers.findIndex(h => isSurCalendrierColumn(h));
+
+    // Count rows with surSiteCCFHK = Oui
+    let surSiteOuiCount = 0;
+    if (surSiteCol !== -1) {
+      for (let i = 1; i < data.length; i++) {
+        if (toBooleanFilter(data[i][surSiteCol])) {
+          surSiteOuiCount++;
+        }
+      }
+    }
+
+    results.push({
+      sheet: sheetName,
+      headers: headers.join(' | '),
+      début: startCol !== -1 ? `Col ${startCol + 1}` : '❌ NOT FOUND',
+      fin: endCol !== -1 ? `Col ${endCol + 1}` : '❌ NOT FOUND',
+      service: serviceCol !== -1 ? `Col ${serviceCol + 1}` : '❌ NOT FOUND',
+      event: eventCol !== -1 ? `Col ${eventCol + 1} (${headers[eventCol]})` : '❌ NOT FOUND',
+      surSite: surSiteCol !== -1 ? `Col ${surSiteCol + 1} (${headers[surSiteCol]})` : '❌ NOT FOUND',
+      surCalendrier: surCalendrierCol !== -1 ? `Col ${surCalendrierCol + 1}` : '❌ NOT FOUND',
+      surSiteOuiCount: surSiteOuiCount,
+      totalRows: data.length - 1
+    });
+  });
+
+  // Log to console and show in alert
+  console.log('Column Detection Results:', JSON.stringify(results, null, 2));
+
+  // Build summary for alert
+  let summary = 'COLUMN DETECTION RESULTS\n\n';
+  results.forEach(r => {
+    summary += `📄 ${r.sheet}\n`;
+    summary += `   Sur site col: ${r.surSite}\n`;
+    summary += `   Oui count: ${r.surSiteOuiCount} / ${r.totalRows} rows\n\n`;
+  });
+
+  SpreadsheetApp.getUi().alert('Debug: Column Detection', summary, SpreadsheetApp.getUi().ButtonSet.OK);
+
+  return results;
 }
